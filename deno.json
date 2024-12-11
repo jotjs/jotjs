@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.ns", "dom.iterable", "dom", "esnext"]
+  },
+  "exclude": ["dist"],
+  "exports": "./src/main/mod.ts",
+  "imports": {
+    "prettier": "npm:prettier@^3.4.2"
+  },
+  "name": "@jotjs/jotjs",
+  "nodeModulesDir": "auto",
+  "publish": {
+    "include": ["LICENSE", "README.md", "src/main"]
+  },
+  "version": "0.0.1"
+}
