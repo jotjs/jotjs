@@ -1,5 +1,5 @@
 import { getDocument } from "./document.ts";
-import { type Hook, hook } from "./hook.ts";
+import type { Hook } from "./jot.ts";
 
 /**
  *
@@ -57,14 +57,11 @@ export function css<E extends Element>(
     apply(rule, definition);
   }
 
-  return Object.assign(
-    hook<E>((element) => element.classList.add(className)),
-    {
-      [Symbol.toPrimitive]() {
-        return className;
-      },
+  return Object.assign((element: E) => element.classList.add(className), {
+    [Symbol.toPrimitive]() {
+      return className;
     },
-  );
+  });
 }
 
 /**

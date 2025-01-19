@@ -1,4 +1,4 @@
-import { type Hook, hook } from "./hook.ts";
+import type { Hook } from "./jot.ts";
 
 const listeners = new WeakMap<
   Node,
@@ -39,11 +39,11 @@ export function on<N extends Node>(
   listener: EventListenerOrEventListenerObject,
   options?: boolean | AddEventListenerOptions,
 ): Hook<N> {
-  return hook((node) => {
+  return (node) => {
     node.addEventListener(type, listener, options);
 
     if (listeners.get(node)?.push([type, listener]) === undefined) {
       listeners.set(node, [[type, listener]]);
     }
-  });
+  };
 }

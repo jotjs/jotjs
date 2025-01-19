@@ -1,47 +1,59 @@
-import {
-  $,
-  css,
-  fragment,
-  id,
-  jot,
-  on,
-  tags,
-  use,
-  watch,
-} from "../main/mod.ts";
-
-const { button, div, span, input, form } = tags;
+import { $, css, id, jot, on, use, view } from "../main/mod.ts";
+import { button, div, form, input, span } from "./tags.ts";
 
 function Item(label: string, onclick: EventListener) {
-  const completed = use(false);
+  const [completed, setCompleted] = use(false);
 
   return div(
     id(),
     button(
-      "✔️",
-      on("click", () => completed.set((value) => !value)),
+      view(() => ($(completed) ? "↺" : "✔️")),
+      on("click", () => setCompleted((value) => !value)),
     ),
     button("⌦", on("click", onclick)),
-    span(label, {
-      style: watch((s) => {
-        s.textDecoration = $(completed) ? "line-through" : "";
-      }),
+    span(label, (node) => {
+      node.style.textDecoration = $(completed) ? "line-through" : "";
     }),
   );
 }
 
 function App() {
-  const todos = use<string[]>([]);
+  // MODEL
+
+  const [todoItems, setTodoItems] = use<string[]>([]);
+
+  function clearTodoItems() {
+    setTodoItems((items) => {
+      items.length = 0;
+    });
+  }
+
+  function addTodoItem(item: string) {
+    setTodoItems((todoItems) => {
+      todoItems.push(item);
+    });
+  }
+
+  function removeTodoItem(id: number) {
+    setTodoItems((items) => {
+      items.splice(id, 1);
+    });
+  }
+
+  // UI
+
   const label = input();
 
-  return fragment(
+  return [
     form(
       label,
       button("+"),
       button(
         "⊗",
         { type: "button" },
-        on("click", () => todos.set([])),
+        on("click", () => {
+          clearTodoItems();
+        }),
       ),
       on("submit", (event) => {
         event.preventDefault();
@@ -50,22 +62,18 @@ function App() {
           return;
         }
 
-        todos.set((items) => [...items, label.value]);
+        addTodoItem(label.value);
         label.value = "";
       }),
     ),
-    fragment(() =>
-      fragment(
-        ...$(todos)
-          .entries()
-          .map(([id, element]) =>
-            Item(element, () =>
-              todos.set((items) => (items.splice(id, 1), [...items])),
-            ),
-          ),
-      ),
-    ),
-  );
+    view<Element>(() => [
+      ...$(todoItems)
+        .entries()
+        .map(([id, element]) =>
+          Item("view => " + element, () => removeTodoItem(id)),
+        ),
+    ]),
+  ];
 }
 
 jot(

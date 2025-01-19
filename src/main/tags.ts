@@ -1,6 +1,5 @@
 import { getDocument } from "./document.ts";
-import { jot } from "./jot.ts";
-import type { Option } from "./option.ts";
+import { jot, type Option } from "./jot.ts";
 
 /**
  *

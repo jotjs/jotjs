@@ -1,11 +1,4 @@
-import { type Hook, hook } from "./hook.ts";
-
-/**
- *
- */
-export interface Attributes {
-  [key: string]: unknown;
-}
+import type { Option } from "./jot.ts";
 
 /**
  *
@@ -14,30 +7,17 @@ export interface Attributes {
  * @returns
  */
 export function set<E extends Element>(
-  attributes: Attributes,
+  attributes: { [key: string]: unknown },
   namespace?: string | null,
-): Hook<E>[] {
+): Option<E> {
   namespace = namespace || null;
 
   return Object.entries(attributes).map(([name, value]) => {
     if (value == null) {
-      return hook((element) => element.removeAttributeNS(namespace, name));
+      return (element: E) => element.removeAttributeNS(namespace, name);
     }
 
-    if (typeof value === "function") {
-      return hook((element) => {
-        const computed = value(element.getAttributeNS(namespace, name));
-
-        if (computed == null) {
-          return element.removeAttributeNS(namespace, name);
-        }
-
-        element.setAttributeNS(namespace, name, String(computed));
-      }, true);
-    }
-
-    return hook((element) =>
-      element.setAttributeNS(namespace, name, String(value)),
-    );
+    return (element: E) =>
+      element.setAttributeNS(namespace, name, String(value));
   });
 }
