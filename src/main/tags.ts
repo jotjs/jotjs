@@ -5,15 +5,19 @@ import { jot, type Option } from "./jot.ts";
  *
  */
 export type Tags = {
-  [T in keyof HTMLElementTagNameMap | keyof HTMLElementDeprecatedTagNameMap]: <
-    E extends T extends keyof HTMLElementTagNameMap
-      ? HTMLElementTagNameMap[T]
-      : T extends keyof HTMLElementDeprecatedTagNameMap
-        ? HTMLElementDeprecatedTagNameMap[T]
-        : HTMLElement,
-  >(
-    ...options: Option<E>[]
-  ) => E;
+  [T in keyof HTMLElementTagNameMap | keyof HTMLElementDeprecatedTagNameMap]: (
+    ...options: Option<
+      T extends keyof HTMLElementTagNameMap
+        ? HTMLElementTagNameMap[T]
+        : T extends keyof HTMLElementDeprecatedTagNameMap
+          ? HTMLElementDeprecatedTagNameMap[T]
+          : HTMLElement
+    >[]
+  ) => T extends keyof HTMLElementTagNameMap
+    ? HTMLElementTagNameMap[T]
+    : T extends keyof HTMLElementDeprecatedTagNameMap
+      ? HTMLElementDeprecatedTagNameMap[T]
+      : HTMLElement;
 };
 
 /**
@@ -23,21 +27,19 @@ export interface TagsFactory {
   (namespace?: "http://www.w3.org/1999/xhtml"): Tags & TagsFactory;
 
   (namespace: "http://www.w3.org/2000/svg"): {
-    [T in keyof SVGElementTagNameMap]: <E extends SVGElementTagNameMap[T]>(
-      ...options: Option<E>[]
-    ) => E;
+    [T in keyof SVGElementTagNameMap]: (
+      ...options: Option<SVGElementTagNameMap[T]>[]
+    ) => SVGElementTagNameMap[T];
   } & TagsFactory;
 
   (namespace: "http://www.w3.org/1998/Math/MathML"): {
-    [T in keyof MathMLElementTagNameMap]: <
-      E extends MathMLElementTagNameMap[T],
-    >(
-      ...options: Option<E>[]
-    ) => E;
+    [T in keyof MathMLElementTagNameMap]: (
+      ...options: Option<MathMLElementTagNameMap[T]>[]
+    ) => MathMLElementTagNameMap[T];
   } & TagsFactory;
 
   (namespace: string | null): {
-    [tag: string]: <E extends Element>(...options: Option<E>[]) => E;
+    [tag: string]: (...options: Option<Element>[]) => Element;
   } & TagsFactory;
 }
 
