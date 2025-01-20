@@ -66,7 +66,7 @@ function App() {
         label.value = "";
       }),
     ),
-    view<Element>(() => [
+    view(() => [
       ...$(todoItems)
         .entries()
         .map(([id, element]) =>

@@ -6,7 +6,8 @@ const reuse: unique symbol = Symbol();
 
 /**
  *
- * @param nodes
+ * @param node
+ * @param force
  */
 export function dispose(node: Node, force?: boolean): void {
   if (!force && reuse in node) {
@@ -35,22 +36,22 @@ export function reusable<N extends Node>(node: N): N {
  * @param view
  * @returns
  */
-export function view<N extends Node>(
-  view: (node: N) => Option<DocumentFragment>,
-): Option<N> {
+export function view<E extends Element>(
+  view: (element: E) => Option<DocumentFragment>,
+): Option<E> {
   const start = Object.assign(new Text(), { [end]: new Text() });
   const reference = new WeakRef(start);
 
   return [
     start,
-    (node) => {
+    (element) => {
       const start = reference.deref();
 
       if (!start) {
         return;
       }
 
-      const slot = jot(new DocumentFragment(), view(node));
+      const slot = jot(new DocumentFragment(), view(element));
 
       if (!start[end].parentNode) {
         return slot;

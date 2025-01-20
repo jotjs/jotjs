@@ -1,5 +1,5 @@
-import { copy, emptyDir } from "jsr:@std/fs";
-import { context } from "npm:esbuild";
+import { copy, emptyDir } from "@std/fs";
+import { context } from "esbuild";
 
 const dist = "dist";
 
