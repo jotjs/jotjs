@@ -1,6 +1,13 @@
 /**
  *
  */
+export interface Mutator<V> {
+  (next: V | ((value: V) => V | void)): void;
+}
+
+/**
+ *
+ */
 export interface Observable<V> {
   [get](): V;
   [observer](): AsyncGenerator<void, void, void>;
@@ -77,9 +84,7 @@ export function spy<V>(spy: () => V): Observable<V> {
   return observable;
 }
 
-export function use<V>(
-  value: V,
-): [Observable<V>, (next: V | ((value: V) => V | void)) => void] {
+export function use<V>(value: V): [Observable<V>, Mutator<V>] {
   let { promise, resolve } = Promise.withResolvers<void>();
 
   return [

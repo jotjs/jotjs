@@ -18,18 +18,11 @@ export type Option<N extends Node> =
   | null
   | number
   | Option<N>[]
-  | Properties<N>
+  | Partial<N>
   | string
   | symbol
   | undefined
   | void;
-
-/**
- *
- */
-export type Properties<N extends Node> = {
-  [K in keyof N]?: N[K];
-};
 
 function apply<N extends Node>(node: N, option: Option<N>): void {
   if (option == null) {
@@ -63,7 +56,7 @@ function applyHook<N extends Node>(node: N, hook: Hook<N>): void {
 
 function applyObject<N extends Node>(
   node: N,
-  option: Node | Option<N>[] | Properties<N>,
+  option: Node | Option<N>[] | Partial<N>,
 ): void {
   if (isNode(option)) {
     return void node.appendChild(option);

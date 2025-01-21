@@ -7,7 +7,7 @@ import type { Option } from "./jot.ts";
  * @returns
  */
 export function set<E extends Element>(
-  attributes: { [key: string]: unknown },
+  attributes: Record<string, unknown>,
   namespace?: string | null,
 ): Option<E> {
   namespace = namespace || null;

@@ -4,20 +4,18 @@ import type { Hook } from "./jot.ts";
 /**
  *
  */
-export type StyleDefinition =
-  | Partial<CSSStyleDeclaration>
-  | [string, ...StyleDefinition[]];
+export type Style = Partial<CSSStyleDeclaration> | [string, ...Style[]];
 
 let styleId = 0n;
 let stylePrefix: string | undefined;
 let styleSheet: CSSStyleSheet | undefined;
 
-function apply(rule: CSSStyleRule, definition: StyleDefinition): void {
-  if (!Array.isArray(definition)) {
-    return void Object.assign(rule.style, definition);
+function apply(rule: CSSStyleRule, style: Style): void {
+  if (!Array.isArray(style)) {
+    return void Object.assign(rule.style, style);
   }
 
-  const [selector, ...definitions] = definition;
+  const [selector, ...definitions] = style;
 
   const nested = rule.cssRules[
     rule.insertRule(`${selector}{}`, rule.cssRules.length)
@@ -37,12 +35,10 @@ function createStyleSheet(): CSSStyleSheet {
 
 /**
  *
- * @param definitions
+ * @param styles
  * @returns
  */
-export function css<E extends Element>(
-  ...definitions: StyleDefinition[]
-): Hook<E> {
+export function css<E extends Element>(...styles: Style[]): Hook<E> {
   if (!styleSheet) {
     styleSheet = createStyleSheet();
   }
@@ -53,7 +49,7 @@ export function css<E extends Element>(
     styleSheet.insertRule(`.${className}{}`, styleSheet.cssRules.length)
   ] as CSSStyleRule;
 
-  for (const definition of definitions) {
+  for (const definition of styles) {
     apply(rule, definition);
   }
 
@@ -78,4 +74,17 @@ export function setStylePrefix(prefix: string): void {
  */
 export function setStyleSheet(sheet: CSSStyleSheet): void {
   styleSheet = sheet;
+}
+
+/**
+ *
+ * @param classNames
+ * @returns
+ */
+export function toggle<E extends Element>(...classNames: unknown[]): Hook<E> {
+  return (element) => {
+    for (const className of classNames) {
+      element.classList.toggle(String(className));
+    }
+  };
 }
