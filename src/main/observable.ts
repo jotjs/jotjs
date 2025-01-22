@@ -56,15 +56,6 @@ export function spy<V>(spy: () => V): Observable<V> {
 
   restore();
 
-  if (observables.size === 0) {
-    return {
-      [get]() {
-        return value;
-      },
-      async *[observer](): AsyncGenerator<void, void, void> {},
-    };
-  }
-
   const [observable, update] = use<V>(value);
   const generators = [...observables].map((observable) =>
     observable[observer](),

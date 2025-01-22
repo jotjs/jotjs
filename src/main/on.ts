@@ -2,7 +2,11 @@ import type { Hook } from "./jot.ts";
 
 const listeners = new WeakMap<
   Node,
-  [string, EventListenerOrEventListenerObject][]
+  [
+    string,
+    EventListenerOrEventListenerObject | null,
+    AddEventListenerOptions | boolean | undefined,
+  ][]
 >();
 
 /**
@@ -11,8 +15,8 @@ const listeners = new WeakMap<
  * @returns
  */
 export function removeEventListeners(node: Node): void {
-  for (const [type, listener] of listeners.get(node) || []) {
-    node.removeEventListener(type, listener);
+  for (const [type, listener, options] of listeners.get(node) || []) {
+    node.removeEventListener(type, listener, options);
   }
 }
 
@@ -22,11 +26,11 @@ export function removeEventListeners(node: Node): void {
  * @param listener
  * @param options
  */
-export function on<E extends HTMLElement, K extends keyof HTMLElementEventMap>(
+export function on<N extends Node, K extends keyof M, M = HTMLElementEventMap>(
   type: K,
-  listener: (this: E, event: HTMLElementEventMap[K]) => unknown,
-  options?: boolean | AddEventListenerOptions,
-): Hook<E>;
+  listener: (this: N, event: M[K]) => unknown,
+  options?: AddEventListenerOptions | boolean,
+): Hook<N>;
 
 /**
  *
@@ -36,14 +40,14 @@ export function on<E extends HTMLElement, K extends keyof HTMLElementEventMap>(
  */
 export function on<N extends Node>(
   type: string,
-  listener: EventListenerOrEventListenerObject,
-  options?: boolean | AddEventListenerOptions,
+  listener: EventListenerOrEventListenerObject | null,
+  options?: AddEventListenerOptions | boolean,
 ): Hook<N> {
-  return (node) => {
+  return (node): void => {
     node.addEventListener(type, listener, options);
 
-    if (listeners.get(node)?.push([type, listener]) === undefined) {
-      listeners.set(node, [[type, listener]]);
+    if (listeners.get(node)?.push([type, listener, options]) === undefined) {
+      listeners.set(node, [[type, listener, options]]);
     }
   };
 }

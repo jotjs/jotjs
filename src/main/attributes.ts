@@ -1,4 +1,4 @@
-import type { Option } from "./jot.ts";
+import type { Hook } from "./jot.ts";
 
 /**
  *
@@ -9,15 +9,18 @@ import type { Option } from "./jot.ts";
 export function set<E extends Element>(
   attributes: Record<string, unknown>,
   namespace?: string | null,
-): Option<E> {
+): Hook<E> {
   namespace = namespace || null;
 
-  return Object.entries(attributes).map(([name, value]) => {
-    if (value == null) {
-      return (element: E) => element.removeAttributeNS(namespace, name);
-    }
+  return (element): void => {
+    for (const name in attributes) {
+      const value = attributes[name];
 
-    return (element: E) =>
+      if (value == null) {
+        return element.removeAttributeNS(namespace, name);
+      }
+
       element.setAttributeNS(namespace, name, String(value));
-  });
+    }
+  };
 }

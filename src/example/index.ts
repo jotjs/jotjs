@@ -1,4 +1,4 @@
-import { $, css, id, jot, on, use, view } from "../main/mod.ts";
+import { $, css, group, id, jot, on, use, view, watch } from "../main/mod.ts";
 import { button, div, form, input, span } from "./tags.ts";
 
 function Item(label: string, onclick: EventListener) {
@@ -11,9 +11,12 @@ function Item(label: string, onclick: EventListener) {
       on("click", () => setCompleted((value) => !value)),
     ),
     button("⌦", on("click", onclick)),
-    span(label, (node) => {
-      node.style.textDecoration = $(completed) ? "line-through" : "";
-    }),
+    span(
+      label,
+      watch((node) => {
+        node.style.textDecoration = $(completed) ? "line-through" : "";
+      }),
+    ),
   );
 }
 
@@ -44,13 +47,12 @@ function App() {
 
   const label = input();
 
-  return [
+  return group(
     form(
       label,
       button("+"),
       button(
         "⊗",
-        { type: "button" },
         on("click", () => {
           clearTodoItems();
         }),
@@ -66,14 +68,16 @@ function App() {
         label.value = "";
       }),
     ),
-    view(() => [
-      ...$(todoItems)
-        .entries()
-        .map(([id, element]) =>
-          Item("view => " + element, () => removeTodoItem(id)),
-        ),
-    ]),
-  ];
+    view(() =>
+      group(
+        ...$(todoItems)
+          .entries()
+          .map(([id, element]) =>
+            Item("view => " + element, () => removeTodoItem(id)),
+          ),
+      ),
+    ),
+  );
 }
 
 jot(

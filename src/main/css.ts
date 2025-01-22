@@ -53,7 +53,7 @@ export function css<E extends Element>(...styles: Style[]): Hook<E> {
     apply(rule, definition);
   }
 
-  return Object.assign((element: E) => element.classList.add(className), {
+  return Object.assign((element: E): void => element.classList.add(className), {
     [Symbol.toPrimitive]() {
       return className;
     },
@@ -81,10 +81,11 @@ export function setStyleSheet(sheet: CSSStyleSheet): void {
  * @param classNames
  * @returns
  */
-export function toggle<E extends Element>(...classNames: unknown[]): Hook<E> {
-  return (element) => {
-    for (const className of classNames) {
-      element.classList.toggle(String(className));
-    }
+export function toggle<E extends Element>(
+  className: unknown,
+  force?: boolean,
+): Hook<E> {
+  return (element): void => {
+    element.classList.toggle(String(className), force);
   };
 }

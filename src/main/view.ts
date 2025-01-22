@@ -1,4 +1,4 @@
-import { jot, type Option } from "./jot.ts";
+import { group, type Hook, jot, type Option, watch } from "./jot.ts";
 import { removeEventListeners } from "./on.ts";
 
 const end: unique symbol = Symbol();
@@ -36,25 +36,25 @@ export function reusable<N extends Node>(node: N): N {
  * @param view
  * @returns
  */
-export function view<E extends Element>(
-  view: (element: E) => Option<DocumentFragment>,
-): Option<E> {
+export function view<N extends Node>(
+  view: (node: N) => Option<DocumentFragment>,
+): Hook<N> {
   const start = Object.assign(new Text(), { [end]: new Text() });
   const reference = new WeakRef(start);
 
-  return [
+  return group(
     start,
-    (element) => {
+    watch((node): void => {
       const start = reference.deref();
 
       if (!start) {
         return;
       }
 
-      const slot = jot(new DocumentFragment(), view(element));
+      const slot = jot(new DocumentFragment(), view(node));
 
       if (!start[end].parentNode) {
-        return slot;
+        return void jot(node, slot);
       }
 
       const range = new Range();
@@ -66,7 +66,7 @@ export function view<E extends Element>(
 
       range.insertNode(slot);
       dispose(contents);
-    },
+    }),
     start[end],
-  ];
+  );
 }
