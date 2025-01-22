@@ -42,6 +42,12 @@ export function on<N extends Node>(
   type: string,
   listener: EventListenerOrEventListenerObject | null,
   options?: AddEventListenerOptions | boolean,
+): Hook<N>;
+
+export function on<N extends Node>(
+  type: string,
+  listener: EventListenerOrEventListenerObject | null,
+  options?: AddEventListenerOptions | boolean,
 ): Hook<N> {
   return (node): void => {
     node.addEventListener(type, listener, options);
