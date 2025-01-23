@@ -1,4 +1,4 @@
-import type { Hook } from "./jot.ts";
+import type { Callback } from "./jot.ts";
 
 /**
  *
@@ -9,13 +9,11 @@ import type { Hook } from "./jot.ts";
 export function set<E extends Element>(
   attributes: Record<string, unknown>,
   namespace?: string | null,
-): Hook<E> {
+): Callback<E> {
   namespace = namespace || null;
 
   return (element): void => {
-    for (const name in attributes) {
-      const value = attributes[name];
-
+    for (const [name, value] of Object.entries(attributes)) {
       if (value == null) {
         return element.removeAttributeNS(namespace, name);
       }

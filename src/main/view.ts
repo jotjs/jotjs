@@ -1,8 +1,8 @@
-import { group, type Hook, jot, type Option, watch } from "./jot.ts";
+import { jot, watch, type Option } from "./jot.ts";
 import { removeEventListeners } from "./on.ts";
 
-const end: unique symbol = Symbol();
-const reuse: unique symbol = Symbol();
+const end = Symbol();
+const reuse = Symbol();
 
 /**
  *
@@ -38,13 +38,13 @@ export function reusable<N extends Node>(node: N): N {
  */
 export function view<N extends Node>(
   view: (node: N) => Option<DocumentFragment>,
-): Hook<N> {
+): Option<N> {
   const start = Object.assign(new Text(), { [end]: new Text() });
   const reference = new WeakRef(start);
 
-  return group(
+  return [
     start,
-    watch((node): void => {
+    watch((node) => {
       const start = reference.deref();
 
       if (!start) {
@@ -54,7 +54,7 @@ export function view<N extends Node>(
       const slot = jot(new DocumentFragment(), view(node));
 
       if (!start[end].parentNode) {
-        return void jot(node, slot);
+        return slot;
       }
 
       const range = new Range();
@@ -68,5 +68,5 @@ export function view<N extends Node>(
       dispose(contents);
     }),
     start[end],
-  );
+  ];
 }

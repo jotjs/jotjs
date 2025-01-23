@@ -1,5 +1,17 @@
-import { $, css, group, id, jot, on, use, view, watch } from "../main/mod.ts";
-import { button, div, form, input, span } from "./tags.ts";
+import {
+  $,
+  css,
+  id,
+  jot,
+  on,
+  tags,
+  use,
+  view,
+  watch,
+  type Option,
+} from "../main/mod.ts";
+
+export const { button, div, span, input, form } = tags;
 
 function Item(label: string, onclick: EventListener) {
   const [completed, setCompleted] = use(false);
@@ -13,14 +25,14 @@ function Item(label: string, onclick: EventListener) {
     button("⌦", on("click", onclick)),
     span(
       label,
-      watch((node) => {
-        node.style.textDecoration = $(completed) ? "line-through" : "";
+      watch((span) => {
+        span.style.textDecoration = $(completed) ? "line-through" : "";
       }),
     ),
   );
 }
 
-function App() {
+function App(): Option<Element> {
   // MODEL
 
   const [todoItems, setTodoItems] = use<string[]>([]);
@@ -47,7 +59,7 @@ function App() {
 
   const label = input();
 
-  return group(
+  return [
     form(
       label,
       button("+"),
@@ -68,16 +80,14 @@ function App() {
         label.value = "";
       }),
     ),
-    view(() =>
-      group(
-        ...$(todoItems)
-          .entries()
-          .map(([id, element]) =>
-            Item("view => " + element, () => removeTodoItem(id)),
-          ),
-      ),
-    ),
-  );
+    view(() => [
+      ...$(todoItems)
+        .entries()
+        .map(([id, element]) =>
+          Item("view => " + element, () => removeTodoItem(id)),
+        ),
+    ]),
+  ];
 }
 
 jot(

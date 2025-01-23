@@ -2,19 +2,38 @@
  *
  */
 export interface Mutator<V> {
-  (next: V | ((value: V) => V | void)): void;
+  (next: Value<V> | MutatorExpression<V>): void;
+}
+
+/**
+ *
+ */
+export interface MutatorExpression<V> {
+  (value: Value<V>): Value<V> | void;
 }
 
 /**
  *
  */
 export interface Observable<V> {
-  [get](): V;
-  [observer](): AsyncGenerator<void, void, void>;
+  [getValue](): Value<V>;
+  [newObserver](): AsyncGenerator<void, void, void>;
 }
 
-const get: unique symbol = Symbol();
-const observer: unique symbol = Symbol();
+/**
+ *
+ */
+export interface Spy<V> {
+  (): Value<V>;
+}
+
+/**
+ *
+ */
+export type Value<V> = Exclude<V, (...args: unknown[]) => unknown>;
+
+const getValue: unique symbol = Symbol();
+const newObserver: unique symbol = Symbol();
 
 const registry = new FinalizationRegistry(
   (callbacks: (() => Promise<unknown>)[]) => {
@@ -32,10 +51,10 @@ let dependencies: Set<Observable<unknown>> | undefined;
  * @returns
  */
 export function $<V>(observable: Observable<V>): V {
-  return observable[get]();
+  return observable[getValue]();
 }
 
-function isExpression<V>(target: unknown): target is (value: V) => V | void {
+function isExpression<V>(target: unknown): target is MutatorExpression<V> {
   return typeof target === "function";
 }
 
@@ -50,24 +69,24 @@ function prepare(
  * @param spy
  * @returns
  */
-export function spy<V>(spy: () => V): Observable<V> {
+export function spy<V>(spy: Spy<V>): Observable<V> {
   const [observables, restore] = prepare(dependencies);
   const value = spy();
 
   restore();
 
   const [observable, update] = use<V>(value);
-  const generators = [...observables].map((observable) =>
-    observable[observer](),
+  const observers = [...observables].map((observable) =>
+    observable[newObserver](),
   );
 
   registry.register(
     observable,
-    generators.map((generator) => generator.return.bind(generator)),
+    observers.map((observer) => observer.return.bind(observer)),
   );
 
-  generators.forEach(async (generator) => {
-    for await (const _ of generator) {
+  observers.forEach(async (observer) => {
+    for await (const _ of observer) {
       update(spy());
     }
   });
@@ -75,15 +94,15 @@ export function spy<V>(spy: () => V): Observable<V> {
   return observable;
 }
 
-export function use<V>(value: V): [Observable<V>, Mutator<V>] {
+export function use<V>(value: Value<V>): [Observable<V>, Mutator<V>] {
   let { promise, resolve } = Promise.withResolvers<void>();
 
   return [
     {
-      [get]() {
+      [getValue]() {
         return dependencies?.add(this), value;
       },
-      async *[observer](): AsyncGenerator<void, void, void> {
+      async *[newObserver](): AsyncGenerator<void, void, void> {
         while (true) {
           yield promise;
         }

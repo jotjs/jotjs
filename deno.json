@@ -14,5 +14,5 @@
   "publish": {
     "include": ["LICENSE", "README.md", "src/main"]
   },
-  "version": "0.0.7"
+  "version": "0.0.8"
 }

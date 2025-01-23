@@ -3,8 +3,15 @@ import { spy } from "./observable.ts";
 /**
  *
  */
+export interface Callback<N extends Node> {
+  (node: N): Option<N>;
+}
+
+/**
+ *
+ */
 export interface Hook<N extends Node> {
-  (node: N): void;
+  [hook](node: N): Option<N>;
 }
 
 /**
@@ -13,14 +20,24 @@ export interface Hook<N extends Node> {
 export type Option<N extends Node> =
   | bigint
   | boolean
+  | Callback<N>
   | Hook<N>
   | Node
   | null
   | number
+  | Option<N>[]
+  | Properties<N>
   | string
   | symbol
   | undefined
   | void;
+
+/**
+ *
+ */
+export type Properties<N extends Node> = Partial<Omit<N, "nodeType">>;
+
+export const hook: unique symbol = Symbol();
 
 function apply<N extends Node>(node: N, option: Option<N>): void {
   if (option == null) {
@@ -29,26 +46,25 @@ function apply<N extends Node>(node: N, option: Option<N>): void {
 
   switch (typeof option) {
     case "function":
-      return option(node);
+      return apply(node, option(node));
 
     case "object":
-      return void node.appendChild(option);
+      if (hook in option) {
+        return apply(node, option[hook](node));
+      }
+
+      if ("nodeType" in option) {
+        return void node.appendChild(option);
+      }
+
+      if (Array.isArray(option)) {
+        return void jot(node, ...option);
+      }
+
+      return void Object.assign(node, option);
   }
 
   return void node.appendChild(new Text(String(option)));
-}
-
-/**
- *
- * @param options
- * @returns
- */
-export function group<N extends Node>(...options: Option<N>[]): Hook<N> {
-  return (node): void => {
-    for (const option of options) {
-      apply(node, option);
-    }
-  };
 }
 
 /**
@@ -58,15 +74,19 @@ export function group<N extends Node>(...options: Option<N>[]): Hook<N> {
  * @returns
  */
 export function jot<N extends Node>(node: N, ...options: Option<N>[]): N {
-  return group(...options)(node), node;
+  for (const option of options) {
+    apply(node, option);
+  }
+
+  return node;
 }
 
 /**
  *
- * @param hook
+ * @param callback
  * @returns
  */
-export function watch<N extends Node>(hook: Hook<N>): Hook<N> {
+export function watch<N extends Node>(callback: Callback<N>): Callback<N> {
   return (node): void => {
     const reference = new WeakRef(node);
 
@@ -75,7 +95,7 @@ export function watch<N extends Node>(hook: Hook<N>): Hook<N> {
         const node = reference.deref();
 
         if (node) {
-          apply(node, hook(node));
+          apply(node, callback(node));
         }
       }),
     });

@@ -1,4 +1,4 @@
-import type { Hook } from "./jot.ts";
+import { hook, type Hook } from "./jot.ts";
 
 let value = 0n;
 
@@ -6,17 +6,12 @@ let value = 0n;
  *
  * @returns
  */
-export function id<E extends Element>(): Hook<E> {
+export function id<E extends Element>(): string & Hook<E> {
   const id = String(value++);
 
-  return Object.assign(
-    (element: E): void => {
+  return Object.assign(id, {
+    [hook](element: E): void {
       element.id = id;
     },
-    {
-      [Symbol.toPrimitive]() {
-        return id;
-      },
-    },
-  );
+  });
 }

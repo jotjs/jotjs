@@ -1,11 +1,11 @@
-let context = document;
+let doc = document;
 
 /**
  *
  * @returns
  */
 export function getDocument(): Document {
-  return context;
+  return doc;
 }
 
 /**
@@ -13,5 +13,5 @@ export function getDocument(): Document {
  * @param document
  */
 export function setDocument(document: Document): void {
-  context = document;
+  doc = document;
 }

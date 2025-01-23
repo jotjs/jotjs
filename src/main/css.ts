@@ -1,12 +1,12 @@
 import { getDocument } from "./document.ts";
-import type { Hook } from "./jot.ts";
+import { id } from "./id.ts";
+import { hook, type Callback, type Hook } from "./jot.ts";
 
 /**
  *
  */
 export type Style = Partial<CSSStyleDeclaration> | [string, ...Style[]];
 
-let styleId = 0n;
 let stylePrefix: string | undefined;
 let styleSheet: CSSStyleSheet | undefined;
 
@@ -15,14 +15,14 @@ function apply(rule: CSSStyleRule, style: Style): void {
     return void Object.assign(rule.style, style);
   }
 
-  const [selector, ...definitions] = style;
+  const [selector, ...styles] = style;
 
   const nested = rule.cssRules[
     rule.insertRule(`${selector}{}`, rule.cssRules.length)
   ] as CSSStyleRule;
 
-  for (const definition of definitions) {
-    apply(nested, definition);
+  for (const style of styles) {
+    apply(nested, style);
   }
 }
 
@@ -30,7 +30,13 @@ function createStyleSheet(): CSSStyleSheet {
   const document = getDocument();
   const style = document.createElement("style");
 
-  return document.head.appendChild(style), style.sheet!;
+  document.head.appendChild(style);
+
+  if (!style.sheet) {
+    throw new Error("The CSSStyleSheet cannot be null");
+  }
+
+  return style.sheet;
 }
 
 /**
@@ -38,12 +44,12 @@ function createStyleSheet(): CSSStyleSheet {
  * @param styles
  * @returns
  */
-export function css<E extends Element>(...styles: Style[]): Hook<E> {
+export function css<E extends Element>(...styles: Style[]): string & Hook<E> {
   if (!styleSheet) {
     styleSheet = createStyleSheet();
   }
 
-  const className = (stylePrefix || "s") + styleId++;
+  const className = (stylePrefix || "s") + id();
 
   const rule = styleSheet.cssRules[
     styleSheet.insertRule(`.${className}{}`, styleSheet.cssRules.length)
@@ -53,9 +59,9 @@ export function css<E extends Element>(...styles: Style[]): Hook<E> {
     apply(rule, definition);
   }
 
-  return Object.assign((element: E): void => element.classList.add(className), {
-    [Symbol.toPrimitive]() {
-      return className;
+  return Object.assign(className, {
+    [hook](element: E): void {
+      element.classList.add(className);
     },
   });
 }
@@ -78,13 +84,14 @@ export function setStyleSheet(sheet: CSSStyleSheet): void {
 
 /**
  *
- * @param classNames
+ * @param className
+ * @param force
  * @returns
  */
 export function toggle<E extends Element>(
-  className: unknown,
+  className: string,
   force?: boolean,
-): Hook<E> {
+): Callback<E> {
   return (element): void => {
     element.classList.toggle(String(className), force);
   };
