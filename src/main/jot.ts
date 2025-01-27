@@ -37,7 +37,15 @@ export type Option<N extends Node> =
  */
 export type Properties<N extends Node> = Partial<Omit<N, "nodeType">>;
 
+/**
+ *
+ */
 export const hook: unique symbol = Symbol();
+
+/**
+ *
+ */
+export const global: { window: Window } = { window };
 
 function apply<N extends Node>(node: N, option: Option<N>): void {
   if (option == null) {
@@ -64,7 +72,9 @@ function apply<N extends Node>(node: N, option: Option<N>): void {
       return void Object.assign(node, option);
   }
 
-  return void node.appendChild(new Text(String(option)));
+  return void node.appendChild(
+    global.window.document.createTextNode(String(option)),
+  );
 }
 
 /**

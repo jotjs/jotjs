@@ -1,5 +1,4 @@
-import { getDocument } from "./document.ts";
-import { jot, type Option } from "./jot.ts";
+import { global, jot, type Option } from "./jot.ts";
 
 /**
  *
@@ -62,8 +61,8 @@ export const tags: HTMLTags & TagsFactory = createTagsFactory();
 function createTagsFactory(namespace?: string | null): HTMLTags & TagsFactory {
   const createElement =
     namespace === undefined
-      ? (tag: string) => getDocument().createElement(tag)
-      : (tag: string) => getDocument().createElementNS(namespace, tag);
+      ? (tag: string) => global.window.document.createElement(tag)
+      : (tag: string) => global.window.document.createElementNS(namespace, tag);
 
   return new Proxy(<HTMLTags & TagsFactory>createTagsFactory, {
     get(target, property, receiver) {

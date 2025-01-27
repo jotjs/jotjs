@@ -90,54 +90,39 @@ function App(): Option<Element> {
   ];
 }
 
-jot(
-  document.body,
-  App(),
-  css(
-    {
+jot(document.body, App());
+
+css(
+  {
+    "*": {
+      all: "unset",
+      display: "revert",
+      margin: ".25rem",
+      padding: ".25rem",
+    },
+    ":root": {
       fontFamily: "system-ui",
     },
-    [
-      "@media (prefers-color-scheme: dark)",
-      [
-        "&",
-        {
-          backgroundColor: "#333",
-          color: "#ddd",
-        },
-      ],
-    ],
-    [
-      "*",
-      {
-        all: "unset",
-        display: "revert",
-        margin: ".25rem",
-        padding: ".25rem",
+    "@media (prefers-color-scheme: dark)": {
+      ":root": {
+        backgroundColor: "#333",
+        color: "#ddd",
       },
-    ],
-    [
-      "h1",
-      {
-        fontSize: "2rem",
-      },
-    ],
-    [
-      "input,button",
-      {
-        minHeight: "2rem",
-        minWidth: "2rem",
-        padding: ".25rem .75rem",
-        border: ".1rem solid #ccc",
-        backgroundColor: "#eee",
-        color: "#333",
-      },
-    ],
-    [
-      "button",
-      {
-        textAlign: "center",
-      },
-    ],
-  ),
+    },
+    h1: {
+      fontSize: "2rem",
+    },
+    "input,button": {
+      minHeight: "2rem",
+      minWidth: "2rem",
+      padding: ".25rem .75rem",
+      border: ".1rem solid #ccc",
+      backgroundColor: "#eee",
+      color: "#333",
+    },
+    button: {
+      textAlign: "center",
+    },
+  },
+  true,
 );

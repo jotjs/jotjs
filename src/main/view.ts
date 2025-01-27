@@ -1,4 +1,4 @@
-import { jot, watch, type Option } from "./jot.ts";
+import { global, jot, watch, type Option } from "./jot.ts";
 import { removeEventListeners } from "./on.ts";
 
 const end = Symbol();
@@ -39,7 +39,10 @@ export function reusable<N extends Node>(node: N): N {
 export function view<N extends Node>(
   view: (node: N) => Option<DocumentFragment>,
 ): Option<N> {
-  const start = Object.assign(new Text(), { [end]: new Text() });
+  const { document } = global.window;
+  const start = Object.assign(document.createTextNode(""), {
+    [end]: document.createTextNode(""),
+  });
   const reference = new WeakRef(start);
 
   return [
@@ -51,13 +54,13 @@ export function view<N extends Node>(
         return;
       }
 
-      const slot = jot(new DocumentFragment(), view(node));
+      const slot = jot(document.createDocumentFragment(), view(node));
 
       if (!start[end].parentNode) {
         return slot;
       }
 
-      const range = new Range();
+      const range = document.createRange();
 
       range.setStartAfter(start);
       range.setEndBefore(start[end]);
