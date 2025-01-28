@@ -26,9 +26,9 @@ export function removeEventListeners(node: Node): void {
  * @param listener
  * @param options
  */
-export function on<N extends Node, K extends keyof M, M = HTMLElementEventMap>(
-  type: K,
-  listener: (this: N, event: M[K]) => unknown,
+export function on<N extends Node, T extends keyof E, E = HTMLElementEventMap>(
+  type: T,
+  listener: (this: N, event: E[T]) => unknown,
   options?: AddEventListenerOptions | boolean,
 ): Callback<N>;
 

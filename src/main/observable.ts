@@ -9,7 +9,7 @@ export interface Mutator<V> {
  *
  */
 export interface MutatorExpression<V> {
-  (value: Value<V>): Value<V> | void;
+  (current: Value<V>): Value<V> | void;
 }
 
 /**

@@ -94,12 +94,15 @@ jot(document.body, App());
 
 css(
   {
-    "*": {
-      all: "unset",
-      display: "revert",
-      margin: ".25rem",
-      padding: ".25rem",
-    },
+    "*": [
+      {
+        all: "unset",
+        display: "revert",
+        margin: ".2rem",
+        padding: ".2rem",
+        "--fooBar": "foo",
+      },
+    ],
     ":root": {
       fontFamily: "system-ui",
     },

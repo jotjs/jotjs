@@ -5,9 +5,9 @@ import { global, hook, type Callback, type Option } from "./jot.ts";
  *
  */
 export type Style = {
-  [K in keyof StyleProperties]?: StyleProperties[K] | Style;
+  [K in keyof StyleProperties]?: StyleProperties[K];
 } & {
-  [key: string]: string | Style;
+  [key: string]: string | Style | Style[];
 };
 
 /**
@@ -63,10 +63,14 @@ export function css<E extends Element>(
         continue;
       }
 
-      styleSheet.insertRule(
-        `${key}{${toString(value)}}`,
-        styleSheet.cssRules.length,
-      );
+      const styles = Array.isArray(value) ? value : [value];
+
+      for (const style of styles) {
+        styleSheet.insertRule(
+          `${key}{${toString(style)}}`,
+          styleSheet.cssRules.length,
+        );
+      }
     }
 
     return "";
@@ -119,10 +123,20 @@ export function toggle<E extends Element>(
 
 function toString(style: Style): string {
   return Object.entries(style)
-    .map(([key, value]) =>
-      typeof value === "string"
-        ? `${key.replace(regex, "-$1").toLowerCase()}:${value};`
-        : `${key}{${toString(value)}}`,
-    )
+    .map(([key, value]) => {
+      if (typeof value === "string") {
+        if (!key.startsWith("--")) {
+          key = key.replace(regex, "-$1").toLowerCase();
+        }
+
+        return `${key}:${value};`;
+      }
+
+      if (!Array.isArray(value)) {
+        value = [value];
+      }
+
+      return value.map((value) => `${key}{${toString(value)}}`).join("");
+    })
     .join("");
 }
