@@ -1,5 +1,4 @@
 import {
-  $,
   css,
   id,
   jot,
@@ -14,19 +13,19 @@ import {
 export const { button, div, span, input, form } = tags;
 
 function Item(label: string, onclick: EventListener) {
-  const [completed, setCompleted] = use(false);
+  const [getCompleted, setCompleted] = use(false);
 
   return div(
     id(),
     button(
-      view(() => ($(completed) ? "↺" : "✔️")),
+      view(() => (getCompleted() ? "↺" : "✔️")),
       on("click", () => setCompleted((value) => !value)),
     ),
     button("⌦", on("click", onclick)),
     span(
       label,
       watch((span) => {
-        span.style.textDecoration = $(completed) ? "line-through" : "";
+        span.style.textDecoration = getCompleted() ? "line-through" : "";
       }),
     ),
   );
@@ -35,7 +34,7 @@ function Item(label: string, onclick: EventListener) {
 function App(): Option<Element> {
   // MODEL
 
-  const [todoItems, setTodoItems] = use<string[]>([]);
+  const [getTodoItems, setTodoItems] = use<string[]>([]);
 
   function clearTodoItems() {
     setTodoItems((items) => {
@@ -81,7 +80,7 @@ function App(): Option<Element> {
       }),
     ),
     view(() => [
-      ...$(todoItems)
+      ...getTodoItems()
         .entries()
         .map(([id, element]) =>
           Item("view => " + element, () => removeTodoItem(id)),

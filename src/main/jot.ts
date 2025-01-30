@@ -1,4 +1,4 @@
-import { spy } from "./observable.ts";
+import { spy } from "./state.ts";
 
 /**
  *
