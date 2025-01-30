@@ -1,36 +1,25 @@
-interface AnyFunction {
-  (...args: unknown[]): unknown;
+/**
+ *
+ */
+export type Dependencies<T> = {
+  [K in keyof T]: Mutable<T[K]>;
+};
+
+/**
+ *
+ */
+export interface Mutable<V> {
+  get(): V;
+  spy(): AsyncGenerator<V, void, void>;
 }
 
 /**
  *
  */
-export interface Consumer<V> {
-  (current: Value<V>): Value<V> | void;
+export interface Mutator<V> {
+  set(next: V): void;
+  use(consumer: (current: V, set: (next: V) => void) => void): void;
 }
-
-/**
- *
- */
-export interface Getter<V> {
-  (): Value<V>;
-}
-
-interface Observable {
-  (): AsyncGenerator<void, void, void>;
-}
-
-/**
- *
- */
-export interface Setter<V> {
-  (next: Value<V> | Consumer<V>): void;
-}
-
-/**
- *
- */
-export type Value<V> = Exclude<V, AnyFunction>;
 
 const registry = new FinalizationRegistry(
   (callbacks: (() => Promise<unknown>)[]) => {
@@ -40,76 +29,74 @@ const registry = new FinalizationRegistry(
   },
 );
 
-let dependencies: Set<Observable> | undefined;
-
-function isExpression<V>(target: unknown): target is Consumer<V> {
-  return typeof target === "function";
-}
-
-function prepare(
-  observables: Set<Observable> | undefined,
-): [Set<Observable>, () => void] {
-  return [
-    (dependencies = new Set()),
-    () => {
-      dependencies = observables;
-    },
-  ];
-}
-
 /**
  *
- * @param target
+ * @param report
  * @returns
  */
-export function spy<V>(target: Getter<V>): Getter<V> {
-  const [observables, restore] = prepare(dependencies);
-  const value = target();
+export function spy<V, T>(
+  agent: (targets: T) => V,
+  dependencies: Dependencies<T>,
+): Mutable<V> {
+  const targets = () => {
+    const targets = <T>{};
 
-  restore();
+    for (const name in dependencies) {
+      targets[name] = dependencies[name].get();
+    }
 
-  const [get, set] = use(value);
-  const generators = [...observables].map((observable) => observable());
+    return targets;
+  };
+
+  const { get, set, spy } = use(agent(targets()));
+  const mutable = { get, spy };
+  const generators = Object.values<Mutable<unknown>>(dependencies).map(
+    (dependency) => dependency.spy(),
+  );
 
   registry.register(
-    get,
+    mutable,
     generators.map((generator) => generator.return.bind(generator)),
   );
 
   generators.forEach(async (generator) => {
     for await (const _ of generator) {
-      set(target());
+      set(agent(targets()));
     }
   });
 
-  return get;
+  return mutable;
 }
 
-export function use<V>(value: Value<V>): [Getter<V>, Setter<V>] {
-  let { promise, resolve } = Promise.withResolvers<void>();
+export function use<V>(value: V): Mutable<V> & Mutator<V> {
+  let { promise, resolve } = Promise.withResolvers<V>();
 
-  async function* observable(): AsyncGenerator<void, void, void> {
-    while (true) {
-      yield promise;
-    }
+  function set(next: V) {
+    value = next;
   }
 
-  return [
-    () => {
-      return dependencies?.add(observable), value;
+  function update(update?: typeof resolve) {
+    (update = resolve),
+      ({ promise, resolve } = Promise.withResolvers<V>()),
+      update(value);
+  }
+
+  return {
+    get() {
+      return value;
     },
-    (next) => {
-      const computed = isExpression<V>(next) ? next(value) : next;
-
-      if (computed !== undefined) {
-        value = computed;
-      }
-
-      const update = resolve;
-
-      ({ promise, resolve } = Promise.withResolvers<void>());
-
+    set(value) {
+      set(value);
       update();
     },
-  ];
+    async *spy() {
+      while (true) {
+        yield promise;
+      }
+    },
+    use(consumer) {
+      consumer(value, set);
+      update();
+    },
+  };
 }

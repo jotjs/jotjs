@@ -1,5 +1,6 @@
 import { global, jot, watch, type Option } from "./jot.ts";
 import { removeEventListeners } from "./on.ts";
+import type { Dependencies } from "./state.ts";
 
 const end = Symbol();
 const reuse = Symbol();
@@ -36,8 +37,9 @@ export function reusable<N extends Node>(node: N): N {
  * @param view
  * @returns
  */
-export function view<N extends Node>(
-  view: (node: N) => Option<DocumentFragment>,
+export function view<N extends Node, T>(
+  view: (targets: T, node: N) => Option<DocumentFragment>,
+  dependencies: Dependencies<T>,
 ): Option<N> {
   const { document } = global.window;
   const start = Object.assign(document.createTextNode(""), {
@@ -47,14 +49,14 @@ export function view<N extends Node>(
 
   return [
     start,
-    watch((node) => {
+    watch((targets, node) => {
       const start = reference.deref();
 
       if (!start) {
         return;
       }
 
-      const slot = jot(document.createDocumentFragment(), view(node));
+      const slot = jot(document.createDocumentFragment(), view(targets, node));
 
       if (!start[end].parentNode) {
         return slot;
@@ -69,7 +71,7 @@ export function view<N extends Node>(
 
       range.insertNode(slot);
       dispose(contents);
-    }),
+    }, dependencies),
     start[end],
   ];
 }

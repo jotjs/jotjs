@@ -1,7 +1,7 @@
 import { copy, emptyDir } from "@std/fs";
 import { context } from "esbuild";
 
-const dist = "dist";
+const dist = "dist/example";
 
 await emptyDir(dist);
 await copy("src/example/index.html", `${dist}/index.html`);

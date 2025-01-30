@@ -13,20 +13,23 @@ import {
 export const { button, div, span, input, form } = tags;
 
 function Item(label: string, onclick: EventListener) {
-  const [getCompleted, setCompleted] = use(false);
+  const completed = use(false);
 
   return div(
     id(),
     button(
-      view(() => (getCompleted() ? "↺" : "✔️")),
-      on("click", () => setCompleted((value) => !value)),
+      view(({ completed }) => (completed ? "↺" : "✔️"), { completed }),
+      on("click", () => completed.use((completed, set) => set(!completed))),
     ),
     button("⌦", on("click", onclick)),
     span(
       label,
-      watch((span) => {
-        span.style.textDecoration = getCompleted() ? "line-through" : "";
-      }),
+      watch(
+        ({ completed }, span) => {
+          span.style.textDecoration = completed ? "line-through" : "";
+        },
+        { completed },
+      ),
     ),
   );
 }
@@ -34,22 +37,22 @@ function Item(label: string, onclick: EventListener) {
 function App(): Option<Element> {
   // MODEL
 
-  const [getTodoItems, setTodoItems] = use<string[]>([]);
+  const items = use<string[]>([]);
 
-  function clearTodoItems() {
-    setTodoItems((items) => {
+  function clearItems() {
+    items.use((items) => {
       items.length = 0;
     });
   }
 
-  function addTodoItem(item: string) {
-    setTodoItems((todoItems) => {
+  function addItem(item: string) {
+    items.use((todoItems) => {
       todoItems.push(item);
     });
   }
 
-  function removeTodoItem(id: number) {
-    setTodoItems((items) => {
+  function removeItem(id: number) {
+    items.use((items) => {
       items.splice(id, 1);
     });
   }
@@ -65,7 +68,7 @@ function App(): Option<Element> {
       button(
         "⊗",
         on("click", () => {
-          clearTodoItems();
+          clearItems();
         }),
       ),
       on("submit", (event) => {
@@ -75,17 +78,18 @@ function App(): Option<Element> {
           return;
         }
 
-        addTodoItem(label.value);
+        addItem(label.value);
         label.value = "";
       }),
     ),
-    view(() => [
-      ...getTodoItems()
-        .entries()
-        .map(([id, element]) =>
-          Item("view => " + element, () => removeTodoItem(id)),
+    view(
+      ({ items }) => [
+        [...items.entries()].map(([id, element]) =>
+          Item("view => " + element, () => removeItem(id)),
         ),
-    ]),
+      ],
+      { items },
+    ),
   ];
 }
 

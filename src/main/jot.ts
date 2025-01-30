@@ -1,4 +1,4 @@
-import { spy } from "./state.ts";
+import { spy, type Dependencies } from "./state.ts";
 
 /**
  *
@@ -40,12 +40,12 @@ export type Properties<N extends Node> = Partial<Omit<N, "nodeType">>;
 /**
  *
  */
-export const hook: unique symbol = Symbol();
+export const global: { window: Window } = { window };
 
 /**
  *
  */
-export const global: { window: Window } = { window };
+export const hook: unique symbol = Symbol();
 
 function apply<N extends Node>(node: N, option: Option<N>): void {
   if (option == null) {
@@ -96,18 +96,21 @@ export function jot<N extends Node>(node: N, ...options: Option<N>[]): N {
  * @param callback
  * @returns
  */
-export function watch<N extends Node>(callback: Callback<N>): Callback<N> {
+export function watch<N extends Node, T>(
+  callback: (targets: T, node: N) => Option<N>,
+  dependencies: Dependencies<T>,
+): Callback<N> {
   return (node): void => {
     const reference = new WeakRef(node);
 
     Object.assign(node, {
-      [Symbol()]: spy(() => {
+      [Symbol()]: spy((targets) => {
         const node = reference.deref();
 
         if (node) {
-          apply(node, callback(node));
+          apply(node, callback(targets, node));
         }
-      }),
+      }, dependencies),
     });
   };
 }
