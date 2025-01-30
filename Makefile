@@ -4,7 +4,7 @@ clean:
 	rm -rf dist node_modules
 
 example:
-	deno run -A src/example/server.ts
+	deno run -A src/cmd/example.ts
 
 format: node_modules
 	deno run -A npm:prettier --write .
@@ -19,3 +19,8 @@ node_modules:
 	git config core.hooksPath src/git
 
 pre-commit: clean lint
+
+version: version-patch format
+
+version-patch:
+		deno run -A src/cmd/version.ts patch

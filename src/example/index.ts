@@ -13,13 +13,13 @@ import {
 export const { button, div, span, input, form } = tags;
 
 function Item(label: string, onclick: EventListener) {
-  const completed = use(false);
+  const [completed, update] = use(false);
 
   return div(
     id(),
     button(
       view(({ completed }) => (completed ? "↺" : "✔️"), { completed }),
-      on("click", () => completed.use((completed, set) => set(!completed))),
+      on("click", () => update.with((completed, set) => set(!completed))),
     ),
     button("⌦", on("click", onclick)),
     span(
@@ -37,22 +37,22 @@ function Item(label: string, onclick: EventListener) {
 function App(): Option<Element> {
   // MODEL
 
-  const items = use<string[]>([]);
+  const [items, update] = use<string[]>([]);
 
   function clearItems() {
-    items.use((items) => {
+    update.with((items) => {
       items.length = 0;
     });
   }
 
   function addItem(item: string) {
-    items.use((todoItems) => {
-      todoItems.push(item);
+    update.with((items) => {
+      items.push(item);
     });
   }
 
   function removeItem(id: number) {
-    items.use((items) => {
+    update.with((items) => {
       items.splice(id, 1);
     });
   }

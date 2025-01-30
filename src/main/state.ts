@@ -1,3 +1,7 @@
+interface Consumer<V> {
+  (current: V, set: (next: V) => void): void;
+}
+
 /**
  *
  */
@@ -9,17 +13,19 @@ export type Dependencies<T> = {
  *
  */
 export interface Mutable<V> {
-  get(): V;
-  spy(): AsyncGenerator<V, void, void>;
+  (): V;
+  [generator](): AsyncGenerator<V, void, void>;
 }
 
 /**
  *
  */
 export interface Mutator<V> {
-  set(next: V): void;
-  use(consumer: (current: V, set: (next: V) => void) => void): void;
+  (next: V): void;
+  with(consumer: Consumer<V>): void;
 }
+
+const generator: unique symbol = Symbol();
 
 const registry = new FinalizationRegistry(
   (callbacks: (() => Promise<unknown>)[]) => {
@@ -29,9 +35,16 @@ const registry = new FinalizationRegistry(
   },
 );
 
+export async function* $<V>(
+  mutable: Mutable<V>,
+): AsyncGenerator<V, void, void> {
+  yield* mutable[generator]();
+}
+
 /**
  *
- * @param report
+ * @param agent
+ * @param dependencies
  * @returns
  */
 export function spy<V, T>(
@@ -42,17 +55,14 @@ export function spy<V, T>(
     const targets = <T>{};
 
     for (const name in dependencies) {
-      targets[name] = dependencies[name].get();
+      targets[name] = dependencies[name]();
     }
 
     return targets;
   };
 
-  const { get, set, spy } = use(agent(targets()));
-  const mutable = { get, spy };
-  const generators = Object.values<Mutable<unknown>>(dependencies).map(
-    (dependency) => dependency.spy(),
-  );
+  const [mutable, update] = use(agent(targets()));
+  const generators = Object.values<Mutable<unknown>>(dependencies).map($);
 
   registry.register(
     mutable,
@@ -61,42 +71,55 @@ export function spy<V, T>(
 
   generators.forEach(async (generator) => {
     for await (const _ of generator) {
-      set(agent(targets()));
+      update(agent(targets()));
     }
   });
 
   return mutable;
 }
 
-export function use<V>(value: V): Mutable<V> & Mutator<V> {
+/**
+ *
+ * @param value
+ * @returns
+ */
+export function use<V>(value: V): [Mutable<V>, Mutator<V>] {
   let { promise, resolve } = Promise.withResolvers<V>();
 
-  function set(next: V) {
+  const set = (next: V) => {
     value = next;
-  }
+  };
 
-  function update(update?: typeof resolve) {
+  const update = (update?: typeof resolve) => {
     (update = resolve),
       ({ promise, resolve } = Promise.withResolvers<V>()),
       update(value);
-  }
-
-  return {
-    get() {
-      return value;
-    },
-    set(value) {
-      set(value);
-      update();
-    },
-    async *spy() {
-      while (true) {
-        yield promise;
-      }
-    },
-    use(consumer) {
-      consumer(value, set);
-      update();
-    },
   };
+
+  return [
+    Object.assign(
+      (): V => {
+        return value;
+      },
+      {
+        async *[generator](): AsyncGenerator<V, void, void> {
+          while (true) {
+            yield promise;
+          }
+        },
+      },
+    ),
+    Object.assign(
+      (value: V) => {
+        set(value);
+        update();
+      },
+      {
+        with(consumer: Consumer<V>) {
+          consumer(value, set);
+          update();
+        },
+      },
+    ),
+  ];
 }
