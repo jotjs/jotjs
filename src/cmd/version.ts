@@ -1,11 +1,7 @@
-import { format, increment, parse, type ReleaseType } from "@std/semver";
+export const target = "deno.json";
 
-const target = "deno.json";
+export const json = JSON.parse(await Deno.readTextFile(target));
 
-const json = JSON.parse(await Deno.readTextFile(target));
-
-json.version = format(
-  increment(parse(json.version), Deno.args[0] as ReleaseType),
-);
-
-await Deno.writeTextFile(target, JSON.stringify(json, undefined, 2));
+if (import.meta.main) {
+  console.log(json.version);
+}

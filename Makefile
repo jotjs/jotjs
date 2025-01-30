@@ -20,7 +20,11 @@ node_modules:
 
 pre-commit: clean lint
 
-version: version-patch format
+version:
+	deno run -A src/cmd/version.ts
 
-version-patch:
-		deno run -A src/cmd/version.ts patch
+version-increment: __patch format
+	git tag "$$(deno run -A src/cmd/version.ts)"
+
+__patch:
+		deno run -A src/cmd/version_increment.ts patch
