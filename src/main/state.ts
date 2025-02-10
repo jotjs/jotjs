@@ -1,81 +1,90 @@
-interface Consumer<V> {
-  (current: V, set: (next: V) => void): void;
-}
-
 /**
  *
  */
-export type Dependencies<T> = {
-  [K in keyof T]: Mutable<T[K]>;
-};
-
-/**
- *
- */
-export interface Mutable<V> {
+export interface Accessor<V> {
   (): V;
-  [generator](): AsyncGenerator<V, void, void>;
 }
 
 /**
  *
  */
 export interface Mutator<V> {
-  (next: V): void;
-  with(consumer: Consumer<V>): void;
+  (next: V, now?: boolean): void;
 }
 
-const generator: unique symbol = Symbol();
-
-const registry = new FinalizationRegistry(
-  (callbacks: (() => Promise<unknown>)[]) => {
-    for (const callback of callbacks) {
-      callback();
-    }
-  },
-);
-
-export async function* $<V>(
-  mutable: Mutable<V>,
-): AsyncGenerator<V, void, void> {
-  yield* mutable[generator]();
+interface Observable {
+  (observer: VoidFunction): VoidFunction;
 }
 
 /**
  *
- * @param agent
- * @param dependencies
+ */
+export interface Supplier<V> {
+  (update?: boolean): V;
+}
+
+let updates: Set<VoidFunction> | undefined;
+let dependencies: Set<Observable> | undefined;
+
+function defer(update: VoidFunction): void {
+  if (!updates) {
+    const session = (updates = new Set());
+
+    queueMicrotask(() => {
+      try {
+        for (const update of [...session]) {
+          update();
+        }
+      } finally {
+        updates = undefined;
+      }
+    });
+  }
+
+  updates.add(update);
+}
+
+function prepare(
+  observables: Set<Observable> | undefined,
+): [Set<Observable>, VoidFunction] {
+  return [(dependencies = new Set()), () => (dependencies = observables)];
+}
+
+/**
+ *
+ * @param spy
  * @returns
  */
-export function spy<V, T>(
-  agent: (targets: T) => V,
-  dependencies: Dependencies<T>,
-): Mutable<V> {
-  const targets = () => {
-    const targets = <T>{};
+export function spy<V>(spy: () => V): [Accessor<V>, VoidFunction] {
+  const [observables, restore] = prepare(dependencies);
 
-    for (const name in dependencies) {
-      targets[name] = dependencies[name]();
+  let getValue: Supplier<V>, setValue: Mutator<V>;
+
+  try {
+    [getValue, setValue] = use(spy());
+  } finally {
+    restore();
+  }
+
+  let session: Set<VoidFunction> | undefined;
+
+  const observer = () => {
+    if (session !== updates) {
+      session = updates;
+      setValue(spy(), true);
     }
-
-    return targets;
   };
 
-  const [mutable, update] = use(agent(targets()));
-  const generators = Object.values<Mutable<unknown>>(dependencies).map($);
+  const disposables = [...observables].map((add) => add(observer));
 
-  registry.register(
-    mutable,
-    generators.map((generator) => generator.return.bind(generator)),
-  );
-
-  generators.forEach(async (generator) => {
-    for await (const _ of generator) {
-      update(agent(targets()));
-    }
-  });
-
-  return mutable;
+  return [
+    () => getValue(),
+    () => {
+      for (const dispose of disposables) {
+        dispose();
+      }
+    },
+  ];
 }
 
 /**
@@ -83,43 +92,38 @@ export function spy<V, T>(
  * @param value
  * @returns
  */
-export function use<V>(value: V): [Mutable<V>, Mutator<V>] {
-  let { promise, resolve } = Promise.withResolvers<V>();
+export function use<V>(value: V): [Supplier<V>, Mutator<V>] {
+  const observers = new Set<VoidFunction>();
 
-  const set = (next: V) => {
-    value = next;
+  const observable = (observer: VoidFunction) => {
+    observers.add(observer);
+    return () => observers.delete(observer);
   };
 
-  const update = (update?: typeof resolve) => {
-    (update = resolve),
-      ({ promise, resolve } = Promise.withResolvers<V>()),
-      update(value);
+  const update = () => {
+    for (const observe of observers) {
+      observe();
+    }
   };
 
   return [
-    Object.assign(
-      (): V => {
-        return value;
-      },
-      {
-        async *[generator](): AsyncGenerator<V, void, void> {
-          while (true) {
-            yield promise;
-          }
-        },
-      },
-    ),
-    Object.assign(
-      (value: V) => {
-        set(value);
+    (notify?: boolean) => {
+      if (notify) {
+        defer(update);
+      }
+
+      dependencies?.add(observable);
+
+      return value;
+    },
+    (next, now) => {
+      value = next;
+
+      if (now) {
         update();
-      },
-      {
-        with(consumer: Consumer<V>) {
-          consumer(value, set);
-          update();
-        },
-      },
-    ),
+      } else {
+        defer(update);
+      }
+    },
   ];
 }

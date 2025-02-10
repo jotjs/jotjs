@@ -32,11 +32,7 @@ export const tags: Tags<HTMLElementTagNameMap> &
   Tags<HTMLElementDeprecatedTagNameMap> &
   TagsFactory = createTagsFactory();
 
-function createTagsFactory(
-  namespace?: string | null,
-): Tags<HTMLElementTagNameMap> &
-  Tags<HTMLElementDeprecatedTagNameMap> &
-  TagsFactory {
+function createTagsFactory(namespace?: string | null) {
   const createElement =
     namespace === undefined
       ? (tag: string) => global.window.document.createElement(tag)

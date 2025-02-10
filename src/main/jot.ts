@@ -1,4 +1,5 @@
-import { spy, type Dependencies } from "./state.ts";
+import { removeEventListeners } from "./on.ts";
+import { spy } from "./state.ts";
 
 /**
  *
@@ -42,6 +43,9 @@ export type Properties<N extends Node> = Partial<Omit<N, "nodeType">>;
  */
 export const global: { window: Window } = { window };
 
+const reserve = new WeakSet<Node>();
+const disposables = new WeakMap<Node, VoidFunction[]>();
+
 /**
  *
  */
@@ -54,7 +58,7 @@ function apply<N extends Node>(node: N, option: Option<N>): void {
 
   switch (typeof option) {
     case "function":
-      return apply(node, option(node));
+      return applyCallback(node, option);
 
     case "object":
       if (hook in option) {
@@ -77,6 +81,26 @@ function apply<N extends Node>(node: N, option: Option<N>): void {
   );
 }
 
+function applyCallback<N extends Node>(node: N, callback: Callback<N>): void {
+  let spies = disposables.get(node);
+
+  if (!spies) {
+    disposables.set(node, (spies = []));
+  }
+
+  const reference = new WeakRef(node);
+
+  spies.push(
+    spy(() => {
+      const node = reference.deref();
+
+      if (node) {
+        apply(node, callback(node));
+      }
+    })[1],
+  );
+}
+
 /**
  *
  * @param node
@@ -93,24 +117,37 @@ export function jot<N extends Node>(node: N, ...options: Option<N>[]): N {
 
 /**
  *
- * @param callback
+ * @param node
+ * @param force
+ */
+export function remove(node: Node, force?: boolean): void {
+  if (!force && reserve.has(node)) {
+    return;
+  }
+
+  for (const child of [...node.childNodes]) {
+    remove(child, force);
+  }
+
+  removeSpies(node);
+  removeEventListeners(node);
+  node.parentNode?.removeChild(node);
+}
+
+function removeSpies(node: Node): void {
+  for (const dispose of disposables.get(node) || []) {
+    dispose();
+  }
+
+  disposables.delete(node);
+}
+
+/**
+ *
+ * @param node
  * @returns
  */
-export function watch<N extends Node, T>(
-  callback: (targets: T, node: N) => Option<N>,
-  dependencies: Dependencies<T>,
-): Callback<N> {
-  return (node): void => {
-    const reference = new WeakRef(node);
-
-    Object.assign(node, {
-      [Symbol()]: spy((targets) => {
-        const node = reference.deref();
-
-        if (node) {
-          apply(node, callback(targets, node));
-        }
-      }, dependencies),
-    });
-  };
+export function reusable<N extends Node>(node: N): N {
+  reserve.add(node);
+  return node;
 }

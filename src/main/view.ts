@@ -1,77 +1,53 @@
-import { global, jot, watch, type Option } from "./jot.ts";
-import { removeEventListeners } from "./on.ts";
-import type { Dependencies } from "./state.ts";
+import { global, jot, remove, type Option } from "./jot.ts";
 
-const end = Symbol();
-const reuse = Symbol();
-
-/**
- *
- * @param node
- * @param force
- */
-export function dispose(node: Node, force?: boolean): void {
-  if (!force && reuse in node) {
-    return;
-  }
-
-  for (const child of [...node.childNodes]) {
-    dispose(child, force);
-  }
-
-  removeEventListeners(node);
-  node.parentNode?.removeChild(node);
-}
-
-/**
- *
- * @param node
- * @returns
- */
-export function reusable<N extends Node>(node: N): N {
-  return Object.assign(node, { [reuse]: null });
-}
+const ends = new WeakMap<Node, Node>();
 
 /**
  *
  * @param view
  * @returns
  */
-export function view<N extends Node, T>(
-  view: (targets: T, node: N) => Option<DocumentFragment>,
-  dependencies: Dependencies<T>,
+export function view<N extends Node>(
+  view: (node: N) => Option<DocumentFragment>,
 ): Option<N> {
   const { document } = global.window;
-  const start = Object.assign(document.createTextNode(""), {
-    [end]: document.createTextNode(""),
-  });
+  const start = document.createTextNode("");
+  const end = document.createTextNode("");
   const reference = new WeakRef(start);
+
+  ends.set(start, end);
 
   return [
     start,
-    watch((targets, node) => {
+    (node) => {
       const start = reference.deref();
 
       if (!start) {
         return;
       }
 
-      const slot = jot(document.createDocumentFragment(), view(targets, node));
+      const end = ends.get(start);
 
-      if (!start[end].parentNode) {
+      if (!end) {
+        return;
+      }
+
+      const slot = jot(document.createDocumentFragment(), view(node));
+
+      if (!end.parentNode) {
         return slot;
       }
 
       const range = document.createRange();
 
       range.setStartAfter(start);
-      range.setEndBefore(start[end]);
+      range.setEndBefore(end);
 
       const contents = range.extractContents();
 
       range.insertNode(slot);
-      dispose(contents);
-    }, dependencies),
-    start[end],
+      setTimeout(remove, 100, contents);
+    },
+    end,
   ];
 }
