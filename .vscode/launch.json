@@ -1,0 +1,13 @@
+{
+  "configurations": [
+    {
+      "attachSimplePort": 9229,
+      "name": "Debug Tests",
+      "request": "launch",
+      "runtimeArgs": ["test", "--inspect-wait", "--allow-all"],
+      "runtimeExecutable": "deno",
+      "type": "node"
+    }
+  ],
+  "version": "0.2.0"
+}

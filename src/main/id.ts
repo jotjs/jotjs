@@ -10,7 +10,7 @@ export function id<E extends Element>(): string & Hook<E> {
   const id = String(value++);
 
   return Object.assign(id, {
-    [hook](element: E): void {
+    [hook](element: E) {
       element.id = id;
     },
   });

@@ -1,81 +1,134 @@
-interface Consumer<V> {
-  (current: V, set: (next: V) => void): void;
+/**
+ *
+ */
+export interface Disposable {
+  [disposed](): void;
 }
 
 /**
  *
  */
-export type Dependencies<T> = {
-  [K in keyof T]: Mutable<T[K]>;
+export type Mutable<V extends object> = V & {
+  readonly [K in keyof V as `${typeof prefix}${K & string}`]: V[K];
 };
 
-/**
- *
- */
-export interface Mutable<V> {
-  (): V;
-  [generator](): AsyncGenerator<V, void, void>;
+interface Observable {
+  distance: number;
+  observers: Set<symbol>;
+  update?: VoidFunction;
 }
 
-/**
- *
- */
-export interface Mutator<V> {
-  (next: V): void;
-  with(consumer: Consumer<V>): void;
+const disposed: unique symbol = Symbol();
+
+const prefix = "$";
+const session = new Set<symbol>();
+const registry = new Map<symbol, Observable>();
+
+let dependencies: Set<symbol> | undefined;
+
+function byDistance(a: symbol, b: symbol): number {
+  return (registry.get(a)?.distance || 0) - (registry.get(b)?.distance || 0);
 }
 
-const generator: unique symbol = Symbol();
+function commit(): void {
+  for (const observable of [...session].sort(byDistance)) {
+    const update = registry.get(observable)?.update;
 
-const registry = new FinalizationRegistry(
-  (callbacks: (() => Promise<unknown>)[]) => {
-    for (const callback of callbacks) {
-      callback();
+    if (update) {
+      queueMicrotask(update);
     }
-  },
-);
+  }
 
-export async function* $<V>(
-  mutable: Mutable<V>,
-): AsyncGenerator<V, void, void> {
-  yield* mutable[generator]();
+  session.clear();
+}
+
+function defer(update: symbol): void {
+  if (session.has(update)) {
+    return;
+  }
+
+  if (session.size === 0) {
+    queueMicrotask(commit);
+  }
+
+  session.add(update);
+
+  for (const observer of registry.get(update)?.observers || []) {
+    defer(observer);
+  }
 }
 
 /**
  *
- * @param agent
- * @param dependencies
+ * @param disposables
+ */
+export function dispose(...disposables: Disposable[]) {
+  for (const disposable of disposables) {
+    disposable[disposed]();
+  }
+}
+
+function prepare(
+  observables: Set<symbol> | undefined,
+): [Set<symbol>, VoidFunction] {
+  return [(dependencies = new Set()), () => (dependencies = observables)];
+}
+
+/**
+ *
+ * @param spy
  * @returns
  */
-export function spy<V, T>(
-  agent: (targets: T) => V,
-  dependencies: Dependencies<T>,
-): Mutable<V> {
-  const targets = () => {
-    const targets = <T>{};
+export function spy<V extends object>(
+  spy: () => V | void,
+): Readonly<V> & Disposable {
+  const [observables, restore] = prepare(dependencies);
+  const value = <V>{};
 
-    for (const name in dependencies) {
-      targets[name] = dependencies[name]();
-    }
+  try {
+    Object.assign(value, spy());
+  } finally {
+    restore();
+  }
 
-    return targets;
-  };
+  const id = Symbol();
 
-  const [mutable, update] = use(agent(targets()));
-  const generators = Object.values<Mutable<unknown>>(dependencies).map($);
+  for (const observable of observables) {
+    registry.get(observable)?.observers.add(id);
+  }
 
-  registry.register(
-    mutable,
-    generators.map((generator) => generator.return.bind(generator)),
-  );
-
-  generators.forEach(async (generator) => {
-    for await (const _ of generator) {
-      update(agent(targets()));
-    }
+  registry.set(id, {
+    distance:
+      Math.max(
+        ...[...observables].map((id) => registry.get(id)?.distance || 0),
+      ) + 1,
+    observers: new Set(),
+    update() {
+      Object.assign(value, spy());
+    },
   });
 
-  return mutable;
+  return new Proxy(<Readonly<V> & Disposable>value, {
+    get(target, property, receiver) {
+      if (property === disposed) {
+        return () => {
+          for (const observable of observables) {
+            registry.get(observable)?.observers.delete(id);
+          }
+
+          observables.clear();
+          registry.delete(id);
+        };
+      }
+
+      dependencies?.add(id);
+
+      return Reflect.get(target, property, receiver);
+    },
+    set() {
+      return false;
+    },
+  });
 }
 
 /**
@@ -83,43 +136,37 @@ export function spy<V, T>(
  * @param value
  * @returns
  */
-export function use<V>(value: V): [Mutable<V>, Mutator<V>] {
-  let { promise, resolve } = Promise.withResolvers<V>();
+export function use<V extends object>(value: V): Mutable<V> {
+  const id = Symbol();
 
-  const set = (next: V) => {
-    value = next;
-  };
+  registry.set(id, {
+    distance: 0,
+    observers: new Set(),
+  });
 
-  const update = (update?: typeof resolve) => {
-    (update = resolve),
-      ({ promise, resolve } = Promise.withResolvers<V>()),
-      update(value);
-  };
+  return new Proxy(<Mutable<V>>value, {
+    get(target, property, receiver) {
+      if (typeof property === "string") {
+        if (property.startsWith(prefix)) {
+          defer(id);
+          property = property.substring(prefix.length);
+        } else {
+          dependencies?.add(id);
+        }
+      } else {
+        dependencies?.add(id);
+      }
 
-  return [
-    Object.assign(
-      (): V => {
-        return value;
-      },
-      {
-        async *[generator](): AsyncGenerator<V, void, void> {
-          while (true) {
-            yield promise;
-          }
-        },
-      },
-    ),
-    Object.assign(
-      (value: V) => {
-        set(value);
-        update();
-      },
-      {
-        with(consumer: Consumer<V>) {
-          consumer(value, set);
-          update();
-        },
-      },
-    ),
-  ];
+      return Reflect.get(target, property, receiver);
+    },
+    set(target, property, value, receiver) {
+      if (typeof property === "string" && property.startsWith(prefix)) {
+        return false;
+      }
+
+      defer(id);
+
+      return Reflect.set(target, property, value, receiver);
+    },
+  });
 }
