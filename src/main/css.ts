@@ -1,12 +1,10 @@
-import { id } from "./id.ts";
-import { global, hook, type Callback, type Option } from "./jot.ts";
+import { hook, type Hook } from "./jot.ts";
+import { id } from "./utils.ts";
 
 /**
  *
  */
-export type Style = {
-  [K in keyof StyleProperties]?: StyleProperties[K];
-} & {
+export type Style = Partial<StyleProperties> & {
   [key: string]: string | Style | Style[];
 };
 
@@ -26,68 +24,82 @@ export type StyleProperties = Omit<
   | SymbolConstructor["iterator"]
 >;
 
-const regex = /([A-Z])/g;
+const styles = new WeakSet<symbol>();
+const upperCaseLetters = /([A-Z])/g;
 
 let stylePrefix: string | undefined;
-let styleSheet: CSSStyleSheet | undefined;
+let styleSheet: CSSStyleSheet | null;
 
-function createStyleSheet(): CSSStyleSheet {
-  const { document } = global.window;
+/**
+ *
+ * @param style
+ * @returns
+ */
+export function css<E extends Element>(style: Style): string & Hook<E> {
+  const styleId = Symbol();
+  const className = (stylePrefix || "s") + id();
+
+  return Object.assign(
+    className,
+    hook<E>((element) => {
+      if (!styles.has(styleId)) {
+        insert(
+          getStyleSheet(element.ownerDocument),
+          `.${className}`,
+          toString(style),
+        );
+      }
+
+      element.classList.add(className);
+    }),
+  );
+}
+
+function getStyleSheet(document: Document): CSSStyleSheet {
+  if (styleSheet) {
+    return styleSheet;
+  }
+
   const style = document.createElement("style");
 
   document.head.appendChild(style);
 
-  if (!style.sheet) {
-    throw new Error("style.sheet cannot be null");
-  }
+  styleSheet = style.sheet;
 
-  return style.sheet;
+  return getStyleSheet(document);
 }
 
 /**
  *
- * @param styles
+ * @param style
  * @returns
  */
-export function css<E extends Element>(
-  style: Style,
-  global?: boolean,
-): string & Option<E> {
-  if (!styleSheet) {
-    styleSheet = createStyleSheet();
-  }
+export function globalCss<E extends Element>(style: Style): Hook<E> {
+  const styleId = Symbol();
 
-  if (global) {
-    for (const [key, value] of Object.entries(style)) {
+  return hook((element) => {
+    if (styles.has(styleId)) {
+      return;
+    }
+
+    const styleSheet = getStyleSheet(element.ownerDocument);
+
+    for (const [selector, value] of Object.entries(style)) {
       if (typeof value === "string") {
-        continue;
-      }
-
-      const styles = Array.isArray(value) ? value : [value];
-
-      for (const style of styles) {
-        styleSheet.insertRule(
-          `${key}{${toString(style)}}`,
-          styleSheet.cssRules.length,
-        );
+        insert(styleSheet, selector, value);
+      } else {
+        for (const style of Array.isArray(value) ? value : [value]) {
+          insert(styleSheet, selector, toString(style));
+        }
       }
     }
 
-    return "";
-  }
-
-  const className = (stylePrefix || "s") + id();
-
-  styleSheet.insertRule(
-    `.${className}{${toString(style)}}`,
-    styleSheet.cssRules.length,
-  );
-
-  return Object.assign(className, {
-    [hook](element: E): void {
-      element.classList.add(className);
-    },
+    styles.add(styleId);
   });
+}
+
+function insert(styleSheet: CSSStyleSheet, selector: string, rule: string) {
+  styleSheet.insertRule(`${selector}{${rule}}`, styleSheet.cssRules.length);
 }
 
 /**
@@ -102,7 +114,7 @@ export function setStylePrefix(prefix: string): void {
  *
  * @param sheet
  */
-export function setStyleSheet(sheet: CSSStyleSheet): void {
+export function setStyleSheet(sheet: CSSStyleSheet | null): void {
   styleSheet = sheet;
 }
 
@@ -115,28 +127,31 @@ export function setStyleSheet(sheet: CSSStyleSheet): void {
 export function toggle<E extends Element>(
   className: string,
   force?: boolean,
-): Callback<E> {
-  return (element): void => {
-    element.classList.toggle(String(className), force);
-  };
+): Hook<E> {
+  return hook((element) => {
+    element.classList.toggle(className, force);
+  });
 }
 
 function toString(style: Style): string {
-  return Object.entries(style)
-    .map(([key, value]) => {
-      if (typeof value === "string") {
-        if (!key.startsWith("--")) {
-          key = key.replace(regex, "-$1").toLowerCase();
-        }
+  return Object.entries(style).map(toStyleString).join("");
+}
 
-        return `${key}:${value};`;
-      }
+function toStyleString([key, style]: [
+  string,
+  string | Style | Style[],
+]): string {
+  if (typeof style === "string") {
+    if (!key.startsWith("--")) {
+      key = key.replaceAll(upperCaseLetters, "-$1").toLowerCase();
+    }
 
-      if (!Array.isArray(value)) {
-        value = [value];
-      }
+    return `${key}:${style};`;
+  }
 
-      return value.map((value) => `${key}{${toString(value)}}`).join("");
-    })
-    .join("");
+  if (!Array.isArray(style)) {
+    style = [style];
+  }
+
+  return style.map((style) => `${key}{${toString(style)}}`).join("");
 }

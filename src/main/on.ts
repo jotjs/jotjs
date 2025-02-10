@@ -1,4 +1,4 @@
-import type { Callback } from "./jot.ts";
+import { hook, type Hook } from "./jot.ts";
 
 const listeners = new WeakMap<
   Node,
@@ -30,7 +30,7 @@ export function on<N extends Node, T extends keyof E, E = HTMLElementEventMap>(
   type: T,
   listener: (this: N, event: E[T]) => unknown,
   options?: AddEventListenerOptions | boolean,
-): Callback<N>;
+): Hook<N>;
 
 /**
  *
@@ -42,18 +42,18 @@ export function on<N extends Node>(
   type: string,
   listener: EventListenerOrEventListenerObject | null,
   options?: AddEventListenerOptions | boolean,
-): Callback<N>;
+): Hook<N>;
 
-export function on<N extends Node>(
+export function on(
   type: string,
   listener: EventListenerOrEventListenerObject | null,
   options?: AddEventListenerOptions | boolean,
-): Callback<N> {
-  return (node): void => {
+): Hook<Node> {
+  return hook((node) => {
     node.addEventListener(type, listener, options);
 
     if (listeners.get(node)?.push([type, listener, options]) === undefined) {
       listeners.set(node, [[type, listener, options]]);
     }
-  };
+  });
 }

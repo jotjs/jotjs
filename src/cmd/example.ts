@@ -19,4 +19,6 @@ const server = await (
   port: 8080,
 });
 
-console.log(`http://${server.host}:${server.port}`);
+for (const host of server.hosts) {
+  console.log(`http://${host}:${server.port}`);
+}

@@ -1,57 +1,64 @@
-import { global, jot, type Option } from "./jot.ts";
+import { jot, type Option } from "./jot.ts";
 
 /**
  *
  */
 export type Tags<E extends Record<keyof E, Node>> = {
-  [T in keyof E]: (...options: Option<E[T]>[]) => E[T];
+  readonly [T in keyof E]: (...options: Option<E[T]>[]) => E[T];
 };
 
 /**
  *
+ * @param document
+ * @param namespace
  */
-export interface TagsFactory {
-  (
-    namespace?: "http://www.w3.org/1999/xhtml",
-  ): Tags<HTMLElementTagNameMap> &
-    Tags<HTMLElementDeprecatedTagNameMap> &
-    TagsFactory;
-  (
-    namespace: "http://www.w3.org/1998/Math/MathML",
-  ): Tags<MathMLElementTagNameMap> & TagsFactory;
-  (
-    namespace: "http://www.w3.org/2000/svg",
-  ): Tags<SVGElementTagNameMap> & TagsFactory;
-  (namespace: string | null): Tags<Record<string, Element>> & TagsFactory;
-}
+export function tags(
+  document: Document,
+  namespace?: "http://www.w3.org/1999/xhtml",
+): Tags<HTMLElementTagNameMap> & Tags<HTMLElementDeprecatedTagNameMap>;
 
 /**
  *
+ * @param document
+ * @param namespace
  */
-export const tags: Tags<HTMLElementTagNameMap> &
-  Tags<HTMLElementDeprecatedTagNameMap> &
-  TagsFactory = createTagsFactory();
+export function tags(
+  document: Document,
+  namespace: "http://www.w3.org/1998/Math/MathML",
+): Tags<MathMLElementTagNameMap>;
 
-function createTagsFactory(
-  namespace?: string | null,
-): Tags<HTMLElementTagNameMap> &
-  Tags<HTMLElementDeprecatedTagNameMap> &
-  TagsFactory {
-  const createElement =
+/**
+ *
+ * @param document
+ * @param namespace
+ */
+export function tags(
+  document: Document,
+  namespace: "http://www.w3.org/2000/svg",
+): Tags<SVGElementTagNameMap>;
+
+/**
+ *
+ * @param document
+ * @param namespace
+ */
+export function tags(
+  document: Document,
+  namespace: string | null,
+): Tags<Record<string, Element>>;
+
+export function tags(document: Document, namespace?: string | null) {
+  const createElement: (tag: string) => Element =
     namespace === undefined
-      ? (tag: string) => global.window.document.createElement(tag)
-      : (tag: string) => global.window.document.createElementNS(namespace, tag);
+      ? (tag) => document.createElement(tag)
+      : (tag) => document.createElementNS(namespace, tag);
 
   return new Proxy(
-    <
-      Tags<HTMLElementTagNameMap> &
-        Tags<HTMLElementDeprecatedTagNameMap> &
-        TagsFactory
-    >createTagsFactory,
+    {},
     {
-      get(target, property, receiver) {
+      get(_, property) {
         if (typeof property !== "string") {
-          return Reflect.get(target, property, receiver);
+          return undefined;
         }
 
         return (...options: Option<Node>[]) => {

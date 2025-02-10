@@ -1,4 +1,5 @@
-import { spy, type Dependencies } from "./state.ts";
+import { addObservers } from "./observers.ts";
+import { remove } from "./remove.ts";
 
 /**
  *
@@ -11,7 +12,11 @@ export interface Callback<N extends Node> {
  *
  */
 export interface Hook<N extends Node> {
-  [hook](node: N): Option<N>;
+  [hookTo](node: N): Option<N>;
+}
+
+interface NodeConsumer {
+  (node: Node): void;
 }
 
 /**
@@ -37,44 +42,112 @@ export type Option<N extends Node> =
  */
 export type Properties<N extends Node> = Partial<Omit<N, "nodeType">>;
 
-/**
- *
- */
-export const global: { window: Window } = { window };
+const hookTo: unique symbol = Symbol();
 
-/**
- *
- */
-export const hook: unique symbol = Symbol();
-
-function apply<N extends Node>(node: N, option: Option<N>): void {
+function apply<N extends Node>(
+  node: N,
+  option: Option<N>,
+  applyNode: NodeConsumer,
+): void {
   if (option == null) {
     return;
   }
 
   switch (typeof option) {
     case "function":
-      return apply(node, option(node));
+      return applyCallback(node, option, applyNode);
 
     case "object":
-      if (hook in option) {
-        return apply(node, option[hook](node));
+      if (hookTo in option) {
+        return apply(node, option[hookTo](node), applyNode);
       }
 
       if ("nodeType" in option) {
-        return void node.appendChild(option);
+        return applyNode(option);
       }
 
       if (Array.isArray(option)) {
-        return void jot(node, ...option);
+        for (const nested of option) {
+          apply(node, nested, applyNode);
+        }
+      } else {
+        Object.assign(node, option);
       }
 
-      return void Object.assign(node, option);
+      return;
   }
 
-  return void node.appendChild(
-    global.window.document.createTextNode(String(option)),
-  );
+  if (node.ownerDocument) {
+    applyNode(node.ownerDocument.createTextNode(String(option)));
+  }
+}
+
+function applyCallback<N extends Node>(
+  node: N,
+  callback: Callback<N>,
+  applyNode: NodeConsumer,
+): void {
+  const children: Node[] = [];
+
+  let start: Text;
+  let end: Text;
+
+  function applyChildNode(child: Node) {
+    children.push(child);
+  }
+
+  function update() {
+    const document = node.ownerDocument;
+
+    if (!document) {
+      return;
+    }
+
+    if (!start) {
+      if (children.length === 0) {
+        return;
+      }
+
+      applyNode((start = document.createTextNode("")));
+      applyNode((end = document.createTextNode("")));
+    }
+
+    const range = document.createRange();
+
+    range.setStartAfter(start);
+    range.setEndBefore(end);
+
+    const contents = range.extractContents();
+
+    setTimeout(remove, 100, contents);
+
+    if (children.length === 0) {
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    fragment.append(...children);
+    range.insertNode(fragment);
+  }
+
+  addObservers(node, () => {
+    apply(node, callback(node), applyChildNode);
+    update();
+
+    children.length = 0;
+  });
+}
+
+/**
+ *
+ * @param callback
+ * @returns
+ */
+export function hook<N extends Node>(callback: Callback<N>): Hook<N> {
+  return {
+    [hookTo]: callback,
+  };
 }
 
 /**
@@ -84,33 +157,13 @@ function apply<N extends Node>(node: N, option: Option<N>): void {
  * @returns
  */
 export function jot<N extends Node>(node: N, ...options: Option<N>[]): N {
+  function applyNode(child: Node) {
+    node.appendChild(child);
+  }
+
   for (const option of options) {
-    apply(node, option);
+    apply(node, option, applyNode);
   }
 
   return node;
-}
-
-/**
- *
- * @param callback
- * @returns
- */
-export function watch<N extends Node, T>(
-  callback: (targets: T, node: N) => Option<N>,
-  dependencies: Dependencies<T>,
-): Callback<N> {
-  return (node): void => {
-    const reference = new WeakRef(node);
-
-    Object.assign(node, {
-      [Symbol()]: spy((targets) => {
-        const node = reference.deref();
-
-        if (node) {
-          apply(node, callback(targets, node));
-        }
-      }, dependencies),
-    });
-  };
 }

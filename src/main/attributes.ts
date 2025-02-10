@@ -1,4 +1,4 @@
-import type { Callback } from "./jot.ts";
+import { hook, type Hook } from "./mod.ts";
 
 /**
  *
@@ -6,13 +6,13 @@ import type { Callback } from "./jot.ts";
  * @param namespace
  * @returns
  */
-export function set<E extends Element>(
+export function attributes<E extends Element>(
   attributes: Record<string, unknown>,
   namespace?: string | null,
-): Callback<E> {
-  namespace = namespace || null;
+): Hook<E> {
+  namespace ||= null;
 
-  return (element): void => {
+  return hook((element) => {
     for (const [name, value] of Object.entries(attributes)) {
       if (value == null) {
         return element.removeAttributeNS(namespace, name);
@@ -20,5 +20,5 @@ export function set<E extends Element>(
 
       element.setAttributeNS(namespace, name, String(value));
     }
-  };
+  });
 }
