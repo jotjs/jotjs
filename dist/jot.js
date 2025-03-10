@@ -14,9 +14,9 @@ function attributes(attributes2, namespace) {
 // src/main/state.ts
 var disposal = Symbol();
 var prefix = "$";
+var context = [];
 var session = /* @__PURE__ */ new Set();
 var observables = /* @__PURE__ */ new WeakMap();
-var targets;
 function byDistance(a, b) {
   return toDistance(a) - toDistance(b);
 }
@@ -41,12 +41,13 @@ function defer(update) {
   }
 }
 function derived(state) {
-  const [dependencies, restore] = prepare(targets);
   const mutable2 = {};
+  const dependencies = /* @__PURE__ */ new Set();
+  context.push(dependencies);
   try {
     Object.assign(mutable2, state());
   } finally {
-    restore();
+    context.pop();
   }
   const id2 = Symbol();
   for (const dependency of dependencies) {
@@ -70,7 +71,7 @@ function derived(state) {
           dependencies.delete(id2);
         };
       }
-      targets?.add(id2);
+      context[context.length - 1]?.add(id2);
       return Reflect.get(target, property, receiver);
     },
     set() {
@@ -94,7 +95,7 @@ function mutable(state) {
       if (typeof property === "string" && property.startsWith(prefix)) {
         return defer(id2), Reflect.get(target, property.substring(prefix.length), receiver);
       }
-      targets?.add(id2);
+      context[context.length - 1]?.add(id2);
       return Reflect.get(target, property, receiver);
     },
     set(target, property, value2, receiver) {
@@ -105,9 +106,6 @@ function mutable(state) {
       return Reflect.set(target, property, value2, receiver);
     }
   });
-}
-function prepare(dependencies) {
-  return [targets = /* @__PURE__ */ new Set(), () => targets = dependencies];
 }
 function toDistance(observable) {
   return observables.get(observable)?.distance || 0;
@@ -259,18 +257,19 @@ function jot(node, ...options) {
 }
 
 // src/main/tags.ts
+function tag(createElement, ...options) {
+  return jot(createElement(this), ...options);
+}
 function tags(document, namespace) {
-  const createElement = namespace === void 0 ? (tag) => document.createElement(tag) : (tag) => document.createElementNS(namespace, tag);
+  const createElement = namespace === void 0 ? document.createElement.bind(document) : document.createElementNS.bind(document, namespace);
   return new Proxy(
     {},
     {
       get(_, property) {
-        if (typeof property !== "string") {
-          return void 0;
-        }
-        return (...options) => {
-          return jot(createElement(property), ...options);
-        };
+        return typeof property === "string" ? tag.bind(property, createElement) : void 0;
+      },
+      set() {
+        return false;
       }
     }
   );
@@ -281,7 +280,7 @@ var value = 0n;
 function fragment(...options) {
   return hook((node) => {
     if (node.ownerDocument) {
-      return jot(node.ownerDocument?.createDocumentFragment(), ...options);
+      return jot(node.ownerDocument.createDocumentFragment(), ...options);
     }
   });
 }
@@ -294,14 +293,39 @@ function id() {
     })
   );
 }
+function text(text2) {
+  return hook((node) => {
+    if (node.ownerDocument) {
+      return node.ownerDocument.createTextNode(text2 || "");
+    }
+  });
+}
 
 // src/main/css.ts
 var styles = /* @__PURE__ */ new WeakSet();
 var upperCaseLetters = /([A-Z])/g;
 var stylePrefix;
 var styleSheet;
-function css(style) {
+function css(style, global) {
   const styleId = Symbol();
+  if (global) {
+    return hook((element) => {
+      if (styles.has(styleId)) {
+        return;
+      }
+      const styleSheet2 = getStyleSheet(element.ownerDocument);
+      for (const [selector, value2] of Object.entries(style)) {
+        if (typeof value2 === "string") {
+          insert(styleSheet2, selector, value2);
+        } else {
+          for (const style2 of Array.isArray(value2) ? value2 : [value2]) {
+            insert(styleSheet2, selector, toString(style2));
+          }
+        }
+      }
+      styles.add(styleId);
+    });
+  }
   const className = (stylePrefix || "s") + id();
   return Object.assign(
     className,
@@ -325,25 +349,6 @@ function getStyleSheet(document) {
   document.head.appendChild(style);
   styleSheet = style.sheet;
   return getStyleSheet(document);
-}
-function globalCss(style) {
-  const styleId = Symbol();
-  return hook((element) => {
-    if (styles.has(styleId)) {
-      return;
-    }
-    const styleSheet2 = getStyleSheet(element.ownerDocument);
-    for (const [selector, value2] of Object.entries(style)) {
-      if (typeof value2 === "string") {
-        insert(styleSheet2, selector, value2);
-      } else {
-        for (const style2 of Array.isArray(value2) ? value2 : [value2]) {
-          insert(styleSheet2, selector, toString(style2));
-        }
-      }
-    }
-    styles.add(styleId);
-  });
 }
 function insert(styleSheet2, selector, rule) {
   styleSheet2.insertRule(`${selector}{${rule}}`, styleSheet2.cssRules.length);
@@ -369,10 +374,7 @@ function toStyleString([key, style]) {
     }
     return `${key}:${style};`;
   }
-  if (!Array.isArray(style)) {
-    style = [style];
-  }
-  return style.map((style2) => `${key}{${toString(style2)}}`).join("");
+  return (Array.isArray(style) ? style : [style]).map((style2) => `${key}{${toString(style2)}}`).join("");
 }
 export {
   attributes,
@@ -380,7 +382,6 @@ export {
   derived,
   dispose,
   fragment,
-  globalCss,
   hook,
   id,
   isReusable,
@@ -393,6 +394,7 @@ export {
   setStylePrefix,
   setStyleSheet,
   tags,
+  text,
   toggle
 };
 //# sourceMappingURL=jot.js.map

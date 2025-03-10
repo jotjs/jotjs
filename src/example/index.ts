@@ -1,4 +1,3 @@
-import { globalCss } from "../main/css.ts";
 import {
   css,
   id,
@@ -36,7 +35,7 @@ function Item(label: string, deleteOption: Option<HTMLButtonElement>) {
   );
 }
 
-function App(): Option<Element> {
+function App() {
   // MODEL
 
   const items = mutable({ list: <string[]>[] });
@@ -63,7 +62,7 @@ function App(): Option<Element> {
       label,
       button(span(icon, "add")),
       button(
-        { type: "button" },
+        { type: "reset" },
         span(icon, "clear_all"),
         on("click", () => {
           clearItems();
@@ -71,7 +70,7 @@ function App(): Option<Element> {
       ),
       on("submit", (event) => {
         event.preventDefault();
-        console.log("hi");
+
         if (!label.value) {
           return;
         }
@@ -94,42 +93,45 @@ jot(
   document.body,
   App(),
   link({
-    href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined",
     rel: "stylesheet",
+    href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined",
   }),
-  globalCss({
-    "*": {
-      all: "unset",
-      display: "revert",
-      verticalAlign: "middle",
-    },
-    ":root": {
-      fontFamily: "system-ui",
-      color: "#282A36",
-      backgroundColor: "#F8F8F2",
-    },
-    "@media (prefers-color-scheme: dark)": {
+  link({
+    rel: "stylesheet",
+    href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined",
+  }),
+  css(
+    {
+      "*": {
+        all: "unset",
+        display: "revert",
+        verticalAlign: "middle",
+      },
       ":root": {
-        backgroundColor: "#282A36",
-        color: "#F8F8F2",
+        fontFamily: "system-ui",
+        color: "#282A36",
+        backgroundColor: "#F8F8F2",
+      },
+      "@media(prefers-color-scheme:dark)": {
+        ":root": {
+          backgroundColor: "#282A36",
+          color: "#F8F8F2",
+        },
+      },
+      body: {
+        padding: ".5rem",
+      },
+      "input,button": {
+        minHeight: "2rem",
+        minWidth: "2rem",
+        padding: ".25rem .75rem",
+        backgroundColor: "#eee",
+        color: "#333",
+      },
+      button: {
+        textAlign: "center",
       },
     },
-    h1: {
-      fontSize: "2rem",
-    },
-    body: {
-      padding: ".5rem",
-    },
-    "input,button": {
-      minHeight: "2rem",
-      minWidth: "2rem",
-      padding: ".25rem .75rem",
-      border: ".1rem solid #ccc",
-      backgroundColor: "#eee",
-      color: "#333",
-    },
-    button: {
-      textAlign: "center",
-    },
-  }),
+    true,
+  ),
 );

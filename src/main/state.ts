@@ -21,10 +21,9 @@ interface Observable {
 const disposal: unique symbol = Symbol();
 
 const prefix = "$";
+const context: Set<symbol>[] = [];
 const session = new Set<symbol>();
 const observables = new WeakMap<symbol, Observable>();
-
-let targets: Set<symbol> | undefined;
 
 function byDistance(a: symbol, b: symbol): number {
   return toDistance(a) - toDistance(b);
@@ -64,13 +63,15 @@ function defer(update: symbol): void {
 export function derived<S extends object>(
   state: () => S | void,
 ): Readonly<S> & Disposable {
-  const [dependencies, restore] = prepare(targets);
   const mutable = <S>{};
+  const dependencies = new Set<symbol>();
+
+  context.push(dependencies);
 
   try {
     Object.assign(mutable, state());
   } finally {
-    restore();
+    context.pop();
   }
 
   const id = Symbol();
@@ -100,7 +101,7 @@ export function derived<S extends object>(
         };
       }
 
-      targets?.add(id);
+      context[context.length - 1]?.add(id);
 
       return Reflect.get(target, property, receiver);
     },
@@ -142,7 +143,7 @@ export function mutable<S extends object>(state: S): Mutable<S> {
         );
       }
 
-      targets?.add(id);
+      context[context.length - 1]?.add(id);
 
       return Reflect.get(target, property, receiver);
     },
@@ -156,12 +157,6 @@ export function mutable<S extends object>(state: S): Mutable<S> {
       return Reflect.set(target, property, value, receiver);
     },
   });
-}
-
-function prepare(
-  dependencies: Set<symbol> | undefined,
-): [Set<symbol>, VoidFunction] {
-  return [(targets = new Set()), () => (targets = dependencies)];
 }
 
 function toDistance(observable: symbol): number {

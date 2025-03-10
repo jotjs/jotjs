@@ -7,7 +7,7 @@ export function fragment<N extends Node>(
 ): Hook<N> {
   return hook((node) => {
     if (node.ownerDocument) {
-      return jot(node.ownerDocument?.createDocumentFragment(), ...options);
+      return jot(node.ownerDocument.createDocumentFragment(), ...options);
     }
   });
 }
@@ -25,4 +25,17 @@ export function id<E extends Element>(): string & Hook<E> {
       element.id = id;
     }),
   );
+}
+
+/**
+ *
+ * @param text
+ * @returns
+ */
+export function text<N extends Node>(text?: string): Hook<N> {
+  return hook((node) => {
+    if (node.ownerDocument) {
+      return node.ownerDocument.createTextNode(text || "");
+    }
+  });
 }

@@ -33,10 +33,50 @@ let styleSheet: CSSStyleSheet | null;
 /**
  *
  * @param style
+ * @param global
  * @returns
  */
-export function css<E extends Element>(style: Style): string & Hook<E> {
+export function css<E extends Element>(
+  style: Style,
+  global?: false,
+): string & Hook<E>;
+
+/**
+ *
+ * @param style
+ * @param global
+ * @returns
+ */
+export function css<E extends Element>(style: Style, global: true): Hook<E>;
+
+export function css<E extends Element>(
+  style: Style,
+  global?: boolean,
+): Hook<E> {
   const styleId = Symbol();
+
+  if (global) {
+    return hook((element) => {
+      if (styles.has(styleId)) {
+        return;
+      }
+
+      const styleSheet = getStyleSheet(element.ownerDocument);
+
+      for (const [selector, value] of Object.entries(style)) {
+        if (typeof value === "string") {
+          insert(styleSheet, selector, value);
+        } else {
+          for (const style of Array.isArray(value) ? value : [value]) {
+            insert(styleSheet, selector, toString(style));
+          }
+        }
+      }
+
+      styles.add(styleId);
+    });
+  }
+
   const className = (stylePrefix || "s") + id();
 
   return Object.assign(
@@ -67,35 +107,6 @@ function getStyleSheet(document: Document): CSSStyleSheet {
   styleSheet = style.sheet;
 
   return getStyleSheet(document);
-}
-
-/**
- *
- * @param style
- * @returns
- */
-export function globalCss<E extends Element>(style: Style): Hook<E> {
-  const styleId = Symbol();
-
-  return hook((element) => {
-    if (styles.has(styleId)) {
-      return;
-    }
-
-    const styleSheet = getStyleSheet(element.ownerDocument);
-
-    for (const [selector, value] of Object.entries(style)) {
-      if (typeof value === "string") {
-        insert(styleSheet, selector, value);
-      } else {
-        for (const style of Array.isArray(value) ? value : [value]) {
-          insert(styleSheet, selector, toString(style));
-        }
-      }
-    }
-
-    styles.add(styleId);
-  });
 }
 
 function insert(styleSheet: CSSStyleSheet, selector: string, rule: string) {
@@ -149,9 +160,7 @@ function toStyleString([key, style]: [
     return `${key}:${style};`;
   }
 
-  if (!Array.isArray(style)) {
-    style = [style];
-  }
-
-  return style.map((style) => `${key}{${toString(style)}}`).join("");
+  return (Array.isArray(style) ? style : [style])
+    .map((style) => `${key}{${toString(style)}}`)
+    .join("");
 }
