@@ -1,5 +1,5 @@
+import { id } from "./id.ts";
 import { hook, type Hook } from "./jot.ts";
-import { id } from "./utils.ts";
 
 /**
  *
@@ -24,6 +24,7 @@ export type StyleProperties = Omit<
   | SymbolConstructor["iterator"]
 >;
 
+const bySpace = /\s+/;
 const styles = new WeakSet<symbol>();
 const upperCaseLetters = /([A-Z])/g;
 
@@ -33,10 +34,50 @@ let styleSheet: CSSStyleSheet | null;
 /**
  *
  * @param style
+ * @param global
  * @returns
  */
-export function css<E extends Element>(style: Style): string & Hook<E> {
+export function css<E extends Element>(
+  style: Style,
+  global?: false,
+): string & Hook<E>;
+
+/**
+ *
+ * @param style
+ * @param global
+ * @returns
+ */
+export function css<E extends Element>(style: Style, global: true): Hook<E>;
+
+export function css<E extends Element>(
+  style: Style,
+  global?: boolean,
+): Hook<E> {
   const styleId = Symbol();
+
+  if (global) {
+    return hook((element) => {
+      if (styles.has(styleId)) {
+        return;
+      }
+
+      const styleSheet = getStyleSheet(element.ownerDocument);
+
+      for (const [selector, value] of Object.entries(style)) {
+        if (typeof value === "string") {
+          insert(styleSheet, selector, value);
+        } else {
+          for (const style of Array.isArray(value) ? value : [value]) {
+            insert(styleSheet, selector, toString(style));
+          }
+        }
+      }
+
+      styles.add(styleId);
+    });
+  }
+
   const className = (stylePrefix || "s") + id();
 
   return Object.assign(
@@ -69,35 +110,6 @@ function getStyleSheet(document: Document): CSSStyleSheet {
   return getStyleSheet(document);
 }
 
-/**
- *
- * @param style
- * @returns
- */
-export function globalCss<E extends Element>(style: Style): Hook<E> {
-  const styleId = Symbol();
-
-  return hook((element) => {
-    if (styles.has(styleId)) {
-      return;
-    }
-
-    const styleSheet = getStyleSheet(element.ownerDocument);
-
-    for (const [selector, value] of Object.entries(style)) {
-      if (typeof value === "string") {
-        insert(styleSheet, selector, value);
-      } else {
-        for (const style of Array.isArray(value) ? value : [value]) {
-          insert(styleSheet, selector, toString(style));
-        }
-      }
-    }
-
-    styles.add(styleId);
-  });
-}
-
 function insert(styleSheet: CSSStyleSheet, selector: string, rule: string) {
   styleSheet.insertRule(`${selector}{${rule}}`, styleSheet.cssRules.length);
 }
@@ -125,11 +137,13 @@ export function setStyleSheet(sheet: CSSStyleSheet | null): void {
  * @returns
  */
 export function toggle<E extends Element>(
-  className: string,
+  classNames: string,
   force?: boolean,
 ): Hook<E> {
   return hook((element) => {
-    element.classList.toggle(className, force);
+    for (const className of classNames.split(bySpace)) {
+      element.classList.toggle(className, force);
+    }
   });
 }
 
@@ -149,9 +163,7 @@ function toStyleString([key, style]: [
     return `${key}:${style};`;
   }
 
-  if (!Array.isArray(style)) {
-    style = [style];
-  }
-
-  return style.map((style) => `${key}{${toString(style)}}`).join("");
+  return (Array.isArray(style) ? style : [style])
+    .map((style) => `${key}{${toString(style)}}`)
+    .join("");
 }

@@ -1,171 +1,104 @@
 /**
  *
  */
-export interface Disposable {
-  [disposal](): void;
+export interface Accessor<V> {
+  (): V;
 }
 
 /**
  *
  */
-export type Mutable<S extends object> = S & {
-  readonly [P in Extract<keyof S, string> as `${typeof prefix}${P}`]: S[P];
-};
-
-interface Observable {
-  distance: number;
-  observers: Set<symbol>;
-  update?: VoidFunction;
+export interface Mutator<V> {
+  (next: V): void;
 }
 
-const disposal: unique symbol = Symbol();
+/**
+ *
+ */
+export interface Supplier<V> {
+  (update?: boolean): V;
+}
 
-const prefix = "$";
-const session = new Set<symbol>();
+type Observable = [number, Set<symbol>] | [number, Set<symbol>, VoidFunction];
+
+const context = <Set<symbol>[]>[];
+const updates = new Set<symbol>();
 const observables = new WeakMap<symbol, Observable>();
 
-let targets: Set<symbol> | undefined;
+const byDistance = (a: symbol, b: symbol) => toDistance(a) - toDistance(b);
 
-function byDistance(a: symbol, b: symbol): number {
-  return toDistance(a) - toDistance(b);
-}
+const isNonNullable = <V>(value?: V): value is NonNullable<V> => value != null;
 
-function commit(): void {
-  for (const update of [...session].sort(byDistance).map(toUpdate)) {
-    if (update) {
-      queueMicrotask(update);
+const commit = () => {
+  [...updates]
+    .sort(byDistance)
+    .map(toUpdate)
+    .filter(isNonNullable)
+    .forEach(queueMicrotask);
+
+  updates.clear();
+};
+
+const defer = (update: symbol) => {
+  if (!updates.has(update)) {
+    if (updates.size === 0) {
+      queueMicrotask(commit);
     }
+
+    updates.add(update);
+    (getObservers(update) || []).forEach(defer);
   }
+};
 
-  session.clear();
-}
+const getObservable = (id: symbol) => observables.get(id);
 
-function defer(update: symbol): void {
-  if (session.has(update)) {
-    return;
-  }
-
-  if (session.size === 0) {
-    queueMicrotask(commit);
-  }
-
-  session.add(update);
-
-  for (const observer of observables.get(update)?.observers || []) {
-    defer(observer);
-  }
-}
+const getObservers = (observable: symbol) => getObservable(observable)?.[1];
 
 /**
  *
- * @param state
+ * @param expression
  * @returns
  */
-export function derived<S extends object>(
-  state: () => S | void,
-): Readonly<S> & Disposable {
-  const [dependencies, restore] = prepare(targets);
-  const mutable = <S>{};
+export const spy = <V>(expression: () => V): [Accessor<V>, VoidFunction] => {
+  const dependencies = new Set<symbol>();
+
+  context.push(dependencies);
+
+  let value: V;
 
   try {
-    Object.assign(mutable, state());
+    value = expression();
   } finally {
-    restore();
+    context.pop();
   }
 
   const id = Symbol();
 
   for (const dependency of dependencies) {
-    observables.get(dependency)?.observers.add(id);
+    getObservers(dependency)?.add(id);
   }
 
-  observables.set(id, {
-    distance: [...dependencies].map(toDistance).reduce(toMax, -1) + 1,
-    observers: new Set(),
-    update() {
-      Object.assign(mutable, state());
-    },
-  });
+  observables.set(id, [
+    [...dependencies].map(toDistance).reduce(toMax, -1) + 1,
+    new Set(),
+    () => (value = expression()),
+  ]);
 
-  return new Proxy(<Readonly<S> & Disposable>mutable, {
-    get(target, property, receiver) {
-      if (property === disposal) {
-        return () => {
-          for (const dependency of dependencies) {
-            observables.get(dependency)?.observers.delete(id);
-          }
-
-          dependencies.clear();
-          dependencies.delete(id);
-        };
+  return [
+    () => (track(id), value),
+    () => {
+      for (const dependency of dependencies) {
+        getObservers(dependency)?.delete(id);
       }
 
-      targets?.add(id);
-
-      return Reflect.get(target, property, receiver);
+      dependencies.clear();
+      observables.delete(id);
     },
-    set() {
-      return false;
-    },
-  });
-}
-
-/**
- *
- * @param disposables
- */
-export function dispose(...disposables: Disposable[]) {
-  for (const disposable of disposables) {
-    disposable[disposal]();
-  }
-}
-
-/**
- *
- * @param state
- * @returns
- */
-export function mutable<S extends object>(state: S): Mutable<S> {
-  const id = Symbol();
-
-  observables.set(id, {
-    distance: 0,
-    observers: new Set(),
-  });
-
-  return new Proxy(<Mutable<S>>state, {
-    get(target, property, receiver) {
-      if (typeof property === "string" && property.startsWith(prefix)) {
-        return (
-          defer(id),
-          Reflect.get(target, property.substring(prefix.length), receiver)
-        );
-      }
-
-      targets?.add(id);
-
-      return Reflect.get(target, property, receiver);
-    },
-    set(target, property, value, receiver) {
-      if (typeof property === "string" && property.startsWith(prefix)) {
-        return false;
-      }
-
-      defer(id);
-
-      return Reflect.set(target, property, value, receiver);
-    },
-  });
-}
-
-function prepare(
-  dependencies: Set<symbol> | undefined,
-): [Set<symbol>, VoidFunction] {
-  return [(targets = new Set()), () => (targets = dependencies)];
-}
+  ];
+};
 
 function toDistance(observable: symbol): number {
-  return observables.get(observable)?.distance || 0;
+  return getObservable(observable)?.[0] || 0;
 }
 
 function toMax(a: number, b: number): number {
@@ -173,5 +106,25 @@ function toMax(a: number, b: number): number {
 }
 
 function toUpdate(observable: symbol): VoidFunction | undefined {
-  return observables.get(observable)?.update;
+  return getObservable(observable)?.[2];
+}
+
+function track(observable: symbol): void {
+  context[context.length - 1]?.add(observable);
+}
+
+/**
+ *
+ * @param value
+ * @returns
+ */
+export function use<V>(value: V): [Supplier<V>, Mutator<V>] {
+  const id = Symbol();
+
+  observables.set(id, [0, new Set()]);
+
+  return [
+    (update) => (update ? defer(id) : track(id), value),
+    (next) => ((value = next), defer(id)),
+  ];
 }

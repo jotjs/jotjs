@@ -1,6 +1,6 @@
-import { derived, dispose, type Disposable } from "./state.ts";
+import { spy } from "./state.ts";
 
-const disposables = new WeakMap<Node, Disposable[]>();
+const nodeDisposables = new WeakMap<Node, VoidFunction[]>();
 
 /**
  *
@@ -8,13 +8,13 @@ const disposables = new WeakMap<Node, Disposable[]>();
  * @param observers
  */
 export function addObservers(node: Node, ...observers: VoidFunction[]) {
-  let list = disposables.get(node);
+  let disposables = nodeDisposables.get(node);
 
-  if (!list) {
-    disposables.set(node, (list = []));
+  if (!disposables) {
+    nodeDisposables.set(node, (disposables = []));
   }
 
-  list.push(...observers.map(derived));
+  disposables.push(...observers.map(spy).map(toDisposable));
 }
 
 /**
@@ -23,15 +23,13 @@ export function addObservers(node: Node, ...observers: VoidFunction[]) {
  * @returns
  */
 export function removeObservers(node: Node): void {
-  const list = disposables.get(node);
-
-  if (!list) {
-    return;
+  for (const dispose of nodeDisposables.get(node) || []) {
+    dispose();
   }
 
-  for (const disposable of list) {
-    dispose(disposable);
-  }
+  nodeDisposables.delete(node);
+}
 
-  disposables.delete(node);
+function toDisposable(derived: [unknown, VoidFunction]): VoidFunction {
+  return derived[1];
 }

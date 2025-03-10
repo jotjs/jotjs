@@ -7,10 +7,15 @@ export type Tags<E extends Record<keyof E, Node>> = {
   readonly [T in keyof E]: (...options: Option<E[T]>[]) => E[T];
 };
 
+function tag(this: () => Node, ...options: Option<Node>[]): Node {
+  return jot(this(), ...options);
+}
+
 /**
  *
  * @param document
  * @param namespace
+ * @returns
  */
 export function tags(
   document: Document,
@@ -21,6 +26,7 @@ export function tags(
  *
  * @param document
  * @param namespace
+ * @returns
  */
 export function tags(
   document: Document,
@@ -31,6 +37,7 @@ export function tags(
  *
  * @param document
  * @param namespace
+ * @returns
  */
 export function tags(
   document: Document,
@@ -41,6 +48,7 @@ export function tags(
  *
  * @param document
  * @param namespace
+ * @returns
  */
 export function tags(
   document: Document,
@@ -48,22 +56,21 @@ export function tags(
 ): Tags<Record<string, Element>>;
 
 export function tags(document: Document, namespace?: string | null) {
-  const createElement: (tag: string) => Element =
+  const createElement =
     namespace === undefined
-      ? (tag) => document.createElement(tag)
-      : (tag) => document.createElementNS(namespace, tag);
+      ? document.createElement.bind(document)
+      : document.createElementNS.bind(document, namespace);
 
   return new Proxy(
     {},
     {
       get(_, property) {
-        if (typeof property !== "string") {
-          return undefined;
-        }
-
-        return (...options: Option<Node>[]) => {
-          return jot(createElement(property), ...options);
-        };
+        return typeof property === "string"
+          ? tag.bind(createElement.bind(undefined, property))
+          : undefined;
+      },
+      set() {
+        return false;
       },
     },
   );

@@ -1,129 +1,91 @@
 // src/main/state.ts
-var disposal = Symbol();
-var prefix = "$";
-var session = /* @__PURE__ */ new Set();
+var context = [];
+var updates = /* @__PURE__ */ new Set();
 var observables = /* @__PURE__ */ new WeakMap();
-var targets;
-function byDistance(a, b) {
-  return toDistance(a) - toDistance(b);
-}
-function commit() {
-  for (const update of [...session].sort(byDistance).map(toUpdate)) {
-    if (update) {
-      queueMicrotask(update);
+var byDistance = (a, b) => toDistance(a) - toDistance(b);
+var isNonNullable = (value) => value != null;
+var commit = () => {
+  [...updates].sort(byDistance).map(toUpdate).filter(isNonNullable).forEach(queueMicrotask);
+  updates.clear();
+};
+var defer = (update) => {
+  if (!updates.has(update)) {
+    if (updates.size === 0) {
+      queueMicrotask(commit);
     }
+    updates.add(update);
+    (getObservers(update) || []).forEach(defer);
   }
-  session.clear();
-}
-function defer(update) {
-  if (session.has(update)) {
-    return;
-  }
-  if (session.size === 0) {
-    queueMicrotask(commit);
-  }
-  session.add(update);
-  for (const observer of observables.get(update)?.observers || []) {
-    defer(observer);
-  }
-}
-function derived(state) {
-  const [dependencies, restore] = prepare(targets);
-  const mutable2 = {};
+};
+var getObservable = (id2) => observables.get(id2);
+var getObservers = (observable) => getObservable(observable)?.[1];
+var spy = (expression) => {
+  const dependencies = /* @__PURE__ */ new Set();
+  context.push(dependencies);
+  let value;
   try {
-    Object.assign(mutable2, state());
+    value = expression();
   } finally {
-    restore();
+    context.pop();
   }
   const id2 = Symbol();
   for (const dependency of dependencies) {
-    observables.get(dependency)?.observers.add(id2);
+    getObservers(dependency)?.add(id2);
   }
-  observables.set(id2, {
-    distance: [...dependencies].map(toDistance).reduce(toMax, -1) + 1,
-    observers: /* @__PURE__ */ new Set(),
-    update() {
-      Object.assign(mutable2, state());
-    }
-  });
-  return new Proxy(mutable2, {
-    get(target, property, receiver) {
-      if (property === disposal) {
-        return () => {
-          for (const dependency of dependencies) {
-            observables.get(dependency)?.observers.delete(id2);
-          }
-          dependencies.clear();
-          dependencies.delete(id2);
-        };
+  observables.set(id2, [
+    [...dependencies].map(toDistance).reduce(toMax, -1) + 1,
+    /* @__PURE__ */ new Set(),
+    () => value = expression()
+  ]);
+  return [
+    () => (track(id2), value),
+    () => {
+      for (const dependency of dependencies) {
+        getObservers(dependency)?.delete(id2);
       }
-      targets?.add(id2);
-      return Reflect.get(target, property, receiver);
-    },
-    set() {
-      return false;
+      dependencies.clear();
+      observables.delete(id2);
     }
-  });
-}
-function dispose(...disposables2) {
-  for (const disposable of disposables2) {
-    disposable[disposal]();
-  }
-}
-function mutable(state) {
-  const id2 = Symbol();
-  observables.set(id2, {
-    distance: 0,
-    observers: /* @__PURE__ */ new Set()
-  });
-  return new Proxy(state, {
-    get(target, property, receiver) {
-      if (typeof property === "string" && property.startsWith(prefix)) {
-        return defer(id2), Reflect.get(target, property.substring(prefix.length), receiver);
-      }
-      targets?.add(id2);
-      return Reflect.get(target, property, receiver);
-    },
-    set(target, property, value, receiver) {
-      if (typeof property === "string" && property.startsWith(prefix)) {
-        return false;
-      }
-      defer(id2);
-      return Reflect.set(target, property, value, receiver);
-    }
-  });
-}
-function prepare(dependencies) {
-  return [targets = /* @__PURE__ */ new Set(), () => targets = dependencies];
-}
+  ];
+};
 function toDistance(observable) {
-  return observables.get(observable)?.distance || 0;
+  return getObservable(observable)?.[0] || 0;
 }
 function toMax(a, b) {
   return Math.max(a, b);
 }
 function toUpdate(observable) {
-  return observables.get(observable)?.update;
+  return getObservable(observable)?.[2];
+}
+function track(observable) {
+  context[context.length - 1]?.add(observable);
+}
+function use(value) {
+  const id2 = Symbol();
+  observables.set(id2, [0, /* @__PURE__ */ new Set()]);
+  return [
+    (update) => (update ? defer(id2) : track(id2), value),
+    (next) => (value = next, defer(id2))
+  ];
 }
 
 // src/main/observers.ts
-var disposables = /* @__PURE__ */ new WeakMap();
+var nodeDisposables = /* @__PURE__ */ new WeakMap();
 function addObservers(node, ...observers) {
-  let list = disposables.get(node);
-  if (!list) {
-    disposables.set(node, list = []);
+  let disposables = nodeDisposables.get(node);
+  if (!disposables) {
+    nodeDisposables.set(node, disposables = []);
   }
-  list.push(...observers.map(derived));
+  disposables.push(...observers.map(spy).map(toDisposable));
 }
 function removeObservers(node) {
-  const list = disposables.get(node);
-  if (!list) {
-    return;
+  for (const dispose of nodeDisposables.get(node) || []) {
+    dispose();
   }
-  for (const disposable of list) {
-    dispose(disposable);
-  }
-  disposables.delete(node);
+  nodeDisposables.delete(node);
+}
+function toDisposable(derived) {
+  return derived[1];
 }
 
 // src/main/on.ts
@@ -166,40 +128,34 @@ function remove(node, force) {
 
 // src/main/jot.ts
 var hookTo = Symbol();
-function apply(node, option, applyNode) {
+function apply(node, append, option) {
   if (option == null) {
     return;
   }
   switch (typeof option) {
-    case "function":
-      return applyCallback(node, option, applyNode);
-    case "object":
-      if (hookTo in option) {
-        return apply(node, option[hookTo](node), applyNode);
-      }
+    case "function": {
+      return applyCallback(node, append, option);
+    }
+    case "object": {
       if ("nodeType" in option) {
-        return applyNode(option);
+        return append(option);
       }
-      if (Array.isArray(option)) {
-        for (const nested of option) {
-          apply(node, nested, applyNode);
-        }
-      } else {
-        Object.assign(node, option);
+      const applyObject = apply.bind(void 0, node, append);
+      if (hookTo in option) {
+        return applyObject(option[hookTo](node));
       }
-      return;
+      return Array.isArray(option) ? option.forEach(applyObject) : void Object.assign(node, option);
+    }
   }
   if (node.ownerDocument) {
-    applyNode(node.ownerDocument.createTextNode(String(option)));
+    append(node.ownerDocument.createTextNode(String(option)));
   }
 }
-function applyCallback(node, callback, applyNode) {
+function applyCallback(node, append, callback) {
   const children = [];
   let start;
   let end;
-  function applyChildNode(child) {
-    children.push(child);
-  }
+  const push = children.push.bind(children);
   function update() {
     const document = node.ownerDocument;
     if (!document) {
@@ -209,8 +165,8 @@ function applyCallback(node, callback, applyNode) {
       if (children.length === 0) {
         return;
       }
-      applyNode(start = document.createTextNode(""));
-      applyNode(end = document.createTextNode(""));
+      append(start = document.createTextNode(""));
+      append(end = document.createTextNode(""));
     }
     const range = document.createRange();
     range.setStartAfter(start);
@@ -225,7 +181,7 @@ function applyCallback(node, callback, applyNode) {
     range.insertNode(fragment);
   }
   addObservers(node, () => {
-    apply(node, callback(node), applyChildNode);
+    apply(node, push, callback(node));
     update();
     children.length = 0;
   });
@@ -236,13 +192,9 @@ function hook(callback) {
   };
 }
 function jot(node, ...options) {
-  function applyNode(child) {
-    node.appendChild(child);
-  }
-  for (const option of options) {
-    apply(node, option, applyNode);
-  }
-  return node;
+  const append = node.appendChild.bind(node);
+  const applyOption = apply.bind(void 0, node, append);
+  return options.forEach(applyOption), node;
 }
 
 // src/main/attributes.ts
@@ -259,34 +211,34 @@ function attributes(attributes2, namespace) {
 }
 
 // src/main/tags.ts
+function tag(...options) {
+  return jot(this(), ...options);
+}
 function tags(document, namespace) {
-  const createElement = namespace === void 0 ? (tag) => document.createElement(tag) : (tag) => document.createElementNS(namespace, tag);
+  const createElement = namespace === void 0 ? document.createElement.bind(document) : document.createElementNS.bind(document, namespace);
   return new Proxy(
     {},
     {
       get(_, property) {
-        if (typeof property !== "string") {
-          return void 0;
-        }
-        return (...options) => {
-          return jot(createElement(property), ...options);
-        };
+        return typeof property === "string" ? tag.bind(createElement.bind(void 0, property)) : void 0;
+      },
+      set() {
+        return false;
       }
     }
   );
 }
 export {
   attributes,
-  derived,
-  dispose,
   hook,
   isReusable,
   jot,
-  mutable,
   on,
   remove,
   removeEventListeners,
   reusable,
-  tags
+  spy,
+  tags,
+  use
 };
 //# sourceMappingURL=jot.core.js.map

@@ -1,56 +1,49 @@
-import { globalCss } from "../main/css.ts";
-import {
-  css,
-  id,
-  jot,
-  mutable,
-  on,
-  tags,
-  toggle,
-  type Option,
-} from "../main/mod.ts";
+import { css, id, jot, on, tags, toggle, use } from "../main/mod.ts";
 
-const { button, div, span, input, form, link } = tags(document);
+const { button, div, span, input, form, link, h1 } = tags(document);
 
 const icon = toggle("material-symbols-outlined", true);
 
-function Item(label: string, deleteOption: Option<HTMLButtonElement>) {
-  const item = mutable({ completed: false });
+const itemStyle = css({
+  margin: ".5rem 0",
+  display: "flex",
+  gap: ".5rem",
+  alignItems: "center",
+});
+
+function Item(label: string, onDeleteClick: VoidFunction) {
+  const [completed, setCompleted] = use(false);
 
   return div(
     id(),
-    css({
-      margin: ".5rem 0",
-      display: "flex",
-      gap: ".5rem",
-      alignItems: "center",
-    }),
+    itemStyle,
     button(
-      () => span(icon, item.completed ? "remove_done" : "check"),
-      on("click", () => (item.completed = !item.completed)),
+      icon,
+      () => (completed() ? "remove_done" : "check"),
+      on("click", () => setCompleted(!completed())),
     ),
-    button(span(icon, "close"), deleteOption),
+    button(icon, "close", on("click", onDeleteClick)),
     span(label, (span) => {
-      span.style.textDecoration = item.completed ? "line-through" : "";
+      span.style.textDecoration = completed() ? "line-through" : "";
     }),
   );
 }
 
-function App(): Option<Element> {
+function App() {
   // MODEL
 
-  const items = mutable({ list: <string[]>[] });
+  const [list, setList] = use<string[]>([]);
 
   function clearItems() {
-    items.$list.length = 0;
+    setList([]);
   }
 
   function addItem(item: string) {
-    items.$list.push(item);
+    list(true).push(item);
   }
 
   function removeItem(id: number) {
-    items.$list.splice(id, 1);
+    list(true).splice(id, 1);
   }
 
   // UI
@@ -58,20 +51,22 @@ function App(): Option<Element> {
   const label = input({ autofocus: true });
 
   return [
+    h1(css({ fontSize: "2rem", margin: ".5rem 0" }), "TODO List"),
     form(
       css({ display: "flex", gap: ".5rem" }),
       label,
-      button(span(icon, "add")),
+      button(icon, "add"),
       button(
-        { type: "button" },
-        span(icon, "clear_all"),
+        icon,
+        { type: "reset" },
+        "clear_all",
         on("click", () => {
           clearItems();
         }),
       ),
       on("submit", (event) => {
         event.preventDefault();
-        console.log("hi");
+
         if (!label.value) {
           return;
         }
@@ -81,11 +76,8 @@ function App(): Option<Element> {
       }),
     ),
     () =>
-      [...items.list.entries()].map(([id, element]) =>
-        Item(
-          element,
-          on("click", () => removeItem(id)),
-        ),
+      [...list().entries()].map(([id, element]) =>
+        Item(element, () => removeItem(id)),
       ),
   ];
 }
@@ -94,42 +86,39 @@ jot(
   document.body,
   App(),
   link({
-    href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined",
     rel: "stylesheet",
+    href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&family=Noto+Sans",
   }),
-  globalCss({
-    "*": {
-      all: "unset",
-      display: "revert",
-      verticalAlign: "middle",
-    },
-    ":root": {
-      fontFamily: "system-ui",
-      color: "#282A36",
-      backgroundColor: "#F8F8F2",
-    },
-    "@media (prefers-color-scheme: dark)": {
+  css(
+    {
+      "*": {
+        all: "unset",
+        display: "revert",
+        verticalAlign: "middle",
+      },
       ":root": {
-        backgroundColor: "#282A36",
-        color: "#F8F8F2",
+        fontFamily: "Noto Sans, sans-serif",
+        color: "#282A36",
+        backgroundColor: "#F8F8F2",
+      },
+      "@media(prefers-color-scheme:dark)": {
+        ":root": {
+          backgroundColor: "#282A36",
+          color: "#F8F8F2",
+        },
+      },
+      body: {
+        padding: "2rem",
+      },
+      "input,button": {
+        padding: ".25rem",
+        backgroundColor: "#F8F8F2",
+        color: "#282A36",
+      },
+      button: {
+        textAlign: "center",
       },
     },
-    h1: {
-      fontSize: "2rem",
-    },
-    body: {
-      padding: ".5rem",
-    },
-    "input,button": {
-      minHeight: "2rem",
-      minWidth: "2rem",
-      padding: ".25rem .75rem",
-      border: ".1rem solid #ccc",
-      backgroundColor: "#eee",
-      color: "#333",
-    },
-    button: {
-      textAlign: "center",
-    },
-  }),
+    true,
+  ),
 );

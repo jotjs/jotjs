@@ -15,10 +15,6 @@ export interface Hook<N extends Node> {
   [hookTo](node: N): Option<N>;
 }
 
-interface NodeConsumer {
-  (node: Node): void;
-}
-
 /**
  *
  */
@@ -46,55 +42,56 @@ const hookTo: unique symbol = Symbol();
 
 function apply<N extends Node>(
   node: N,
+  append: (node: Node) => void,
   option: Option<N>,
-  applyNode: NodeConsumer,
 ): void {
   if (option == null) {
     return;
   }
 
   switch (typeof option) {
-    case "function":
-      return applyCallback(node, option, applyNode);
+    case "function": {
+      return applyCallback(node, append, option);
+    }
 
-    case "object":
-      if (hookTo in option) {
-        return apply(node, option[hookTo](node), applyNode);
-      }
-
+    case "object": {
       if ("nodeType" in option) {
-        return applyNode(option);
+        return append(option);
       }
 
-      if (Array.isArray(option)) {
-        for (const nested of option) {
-          apply(node, nested, applyNode);
-        }
-      } else {
-        Object.assign(node, option);
+      const applyObject = apply.bind<
+        undefined,
+        [N, (node: Node) => void],
+        [Option<N>],
+        void
+      >(undefined, node, append);
+
+      if (hookTo in option) {
+        return applyObject(option[hookTo](node));
       }
 
-      return;
+      return Array.isArray(option)
+        ? option.forEach(applyObject)
+        : void Object.assign(node, option);
+    }
   }
 
   if (node.ownerDocument) {
-    applyNode(node.ownerDocument.createTextNode(String(option)));
+    append(node.ownerDocument.createTextNode(String(option)));
   }
 }
 
 function applyCallback<N extends Node>(
   node: N,
+  append: (node: Node) => void,
   callback: Callback<N>,
-  applyNode: NodeConsumer,
 ): void {
   const children: Node[] = [];
 
   let start: Text;
   let end: Text;
 
-  function applyChildNode(child: Node) {
-    children.push(child);
-  }
+  const push = children.push.bind(children);
 
   function update() {
     const document = node.ownerDocument;
@@ -108,8 +105,8 @@ function applyCallback<N extends Node>(
         return;
       }
 
-      applyNode((start = document.createTextNode("")));
-      applyNode((end = document.createTextNode("")));
+      append((start = document.createTextNode("")));
+      append((end = document.createTextNode("")));
     }
 
     const range = document.createRange();
@@ -132,7 +129,7 @@ function applyCallback<N extends Node>(
   }
 
   addObservers(node, () => {
-    apply(node, callback(node), applyChildNode);
+    apply(node, push, callback(node));
     update();
 
     children.length = 0;
@@ -157,13 +154,13 @@ export function hook<N extends Node>(callback: Callback<N>): Hook<N> {
  * @returns
  */
 export function jot<N extends Node>(node: N, ...options: Option<N>[]): N {
-  function applyNode(child: Node) {
-    node.appendChild(child);
-  }
+  const append = node.appendChild.bind(node);
+  const applyOption = apply.bind<
+    undefined,
+    [N, (node: Node) => void],
+    [Option<N>],
+    void
+  >(undefined, node, append);
 
-  for (const option of options) {
-    apply(node, option, applyNode);
-  }
-
-  return node;
+  return options.forEach(applyOption), node;
 }
